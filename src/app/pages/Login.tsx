@@ -35,7 +35,7 @@ export function Login() {
         <Card>
           <CardHeader>
             <CardTitle>Login</CardTitle>
-            <CardDescription>
+            <CardDescription >
               Enter your credentials to continue
             </CardDescription>
           </CardHeader>
@@ -44,6 +44,7 @@ export function Login() {
               <div className="space-y-2">
                 <Label htmlFor="username">Username</Label>
                 <Input
+                  htmlFor="username" className="bg-gray-200 px-2 py-1 rounded"
                   id="username"
                   type="text"
                   placeholder="Enter username"
@@ -55,6 +56,7 @@ export function Login() {
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
                 <Input
+                  htmlFor="username" className="bg-gray-200 px-2 py-1 rounded"
                   id="password"
                   type="password"
                   placeholder="Enter password"
