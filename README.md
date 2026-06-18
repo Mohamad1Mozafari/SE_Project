@@ -8,4 +8,10 @@
   Run `npm i` to install the dependencies.
 
   Run `npm run dev` to start the development server.
+
+
+  rmdir /s /q node_modules\.vite
+
+  npm start
+  npm run electron
   
