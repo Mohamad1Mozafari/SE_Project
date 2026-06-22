@@ -2,7 +2,9 @@ const express = require("express");
 const sql = require("mssql");
 const cors = require("cors");
 const app = express();
-
+let user_pass ; 
+let user_username; 
+let plate_number_g; 
 app.use(cors());
 
 const config = {
@@ -23,7 +25,6 @@ const config = {
     port:1433
 
 };
-
 app.get ("http://localhost:3000/login" , async(req, res)=>{
         let {username , password} =req.body ;   
     try {
@@ -39,6 +40,31 @@ app.get ("http://localhost:3000/login" , async(req, res)=>{
     }
 });
 
+
+app.get ("http://localhost:3000/enter_car" , async(req, res)=>{
+        let {plate_number , entry_time , spot} =req.body ; 
+        plate_number_g = plate_number ;y 
+    try {
+
+            let pool = await sql.connect (config);
+            let query_st = "INSERT INTO CAR VALUES ( "+plate_number+" , "+entry_time+" , "+ spot +");";
+            let result = await pool.request().query (query_st)
+            if (!result){
+                console.log("pass or user name is wrong")
+            }
+    }catch (error){
+        console.log (error);
+        res.status 
+    }
+});
+
+
+
+
+
+
+
+
 app.listen(3000,()=>{
 
     console.log("Server running on port 3000");
@@ -47,3 +73,10 @@ app.listen(3000,()=>{
 
 
 //function sign up , reports , systemlogs , ... 
+// create some triggers for shiftchages or delete user or 
+// delete oprator and etc 
+
+
+
+// apart it always run at the beggning and delete every thing inside 
+// and then run for create the tables functoins and trigers and every thing elesr or run all the commands you like in query in program and after that do that
