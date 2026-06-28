@@ -1,8 +1,36 @@
 export default function login_handler (username , password ){
-// console.log (username); 
-// console.log (password);
-const result = "this user with username :"+ username + "and this password "+password +"is login ";
-return result ;
+    let resoponse = "nothing";
+    let response = await fetch("http://localhost:3000/login",
+    {
+
+        method:"POST",
+
+        headers:{
+            "Content-Type":"application/json"
+        },
+
+
+        body: JSON.stringify({
+
+            username:username,
+
+            password:password
+
+        })
+
+    });
+
+    let result = await response.text();
+    if (result=="successful"){
+
+    }else {
+        response = "username or password is wrong"; 
+    }
+
+// // console.log (username); 
+// // console.log (password);
+// const result = "this user with username :"+ username + "and this password "+password +"is login ";
+// return result ;
 }
 
 // const sql = require ('mssql');
