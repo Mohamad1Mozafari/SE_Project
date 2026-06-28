@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 
   # Public Parking Management System
 
@@ -15,8 +14,3 @@
 
   npm start
   npm run electron
-  
-=======
-# پروژه درس مهندسی نرم افزار
-سیستم مدیریت پارکینگ عمومی
->>>>>>> c045e665a960ea36171547ef4423cef3ed93ea24
