@@ -49,7 +49,7 @@ export default function Recent_Activity (){
 );
 
 let result = await response.json();
-const data = JSON.parse(jsonString);
+const data = JSON.parse(data);
 let arr_names = [];
 let arr_time = [];
     const values = Object.values(data);
