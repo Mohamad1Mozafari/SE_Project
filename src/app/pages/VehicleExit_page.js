@@ -26,14 +26,13 @@ export default function login_handler (plate_number , time , space_choosed ){
     });
 
     let result = await response.text();
-    if (result=="successful_enter"){
+    if (result=="successful_exit"){
         let res_show_UI = true ; 
     }else {
-        response = "enter the car ERORR"; 
+        response = "exit the car ERORR"; 
         let res_show_UI = false ; 
     }
-    return res_show_UI ;
-
+return res_show_UI ;
 // // console.log (username); 
 // // console.log (password);
 // const result = "this user with username :"+ username + "and this password "+password +"is login ";
