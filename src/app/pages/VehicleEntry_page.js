@@ -1,4 +1,4 @@
-export default function login_handler (plate_number , time , space_choosed ){
+export default function vehicleEntry (plate_number , time , space_choosed ){
     let resoponse = "nothing";
     let answer = await fetch(
         "http://localhost:3000/capicity"
