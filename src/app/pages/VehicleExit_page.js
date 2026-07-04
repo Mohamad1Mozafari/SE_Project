@@ -3,28 +3,35 @@ export default function vehicleExit_handler (plate_number){
     let answer = await fetch(
         "http://localhost:3000/capicity"
     );
-    try {
-           let response = await fetch("http://localhost:3000/VehicleExit",
-    {
 
-        method:"POST",
-
-        headers:{
-            "Content-Type":"application/json"
-        },
-
-        body: JSON.stringify({
-
-            plate_number:plate_number
-        })
-    });
-
-            if (!response.ok){
-        throw new Error(`HTTP Error: ${response.status}`);
-        }
-    }catch (error) {
-        console.error("Request failed:", error);
+    const capicity = await answer.json();
+    if (capicity==0){
+        return "ERROR_capicity=0";
     }
+
+
+    // try {
+    //        let response = await fetch("http://localhost:3000/VehicleExit",
+    // {
+
+    //     method:"POST",
+
+    //     headers:{
+    //         "Content-Type":"application/json"
+    //     },
+
+    //     body: JSON.stringify({
+
+    //         plate_number:plate_number
+    //     })
+    // });
+
+    //         if (!response.ok){
+    //     throw new Error(`HTTP Error: ${response.status}`);
+    //     }
+    // }catch (error) {
+    //     console.error("Request failed:", error);
+    // }
 
     //retrun json file 
    
@@ -45,7 +52,7 @@ export default function vehicleExit_handler (plate_number){
     let calculat_fee , parking_duratoin = 0 ;
 
 calculat_fee , parking_duratoin =calculation_FEE(get_result['entry_time'] ,get_result['exit_time'] )
-
+confirm_exist(plate_number); 
 return get_reuslt , calculat_fee , parking_duratoin ;
 // // console.log (username); 
 // // console.log (password);
