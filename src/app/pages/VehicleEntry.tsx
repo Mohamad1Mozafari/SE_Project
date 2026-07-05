@@ -8,9 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { toast } from "sonner";
 import vehicle_entry_handler, { get_available_spots } from "./VehicleEntryHandler";
 
-// DB stores spots without a dash (e.g. "A01"); dash is added only for display
-const formatSpotForDisplay = (location: string) => `${location.charAt(0)}-${location.slice(1)}`;
-
 export function VehicleEntry() {
   const [plateNumber, setPlateNumber] = useState("");
   const [parkingSpot, setParkingSpot] = useState("");
@@ -42,7 +39,7 @@ export function VehicleEntry() {
     setIsSaving(false);
 
     if (isSuccess) {
-      toast.success(`Vehicle ${plateNumber} registered at spot ${formatSpotForDisplay(parkingSpot)}`);
+      toast.success(`Vehicle ${plateNumber} registered at spot ${parkingSpot}`);
       setPlateNumber("");
       setParkingSpot("");
       refreshSpots();
@@ -101,7 +98,7 @@ export function VehicleEntry() {
                       <SelectContent>
                         {availableSpots.map((spot) => (
                           <SelectItem key={spot} value={spot}>
-                            Spot {formatSpotForDisplay(spot)}
+                            Spot {spot}
                           </SelectItem>
                         ))}
                       </SelectContent>

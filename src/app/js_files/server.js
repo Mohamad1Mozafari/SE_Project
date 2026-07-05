@@ -111,8 +111,32 @@ app.get("/api/recent-activity", async (req, res) => {
   }
 });
 
-// VehicleEntry.tsx
-app.post("/api/vehicle-entry", async (req, res) => {
+
+
+// * Vehicle Entry (VehicleEntry.tsx) *
+
+// GET available parking spots
+app.get("/api/vehicle_entry/available_spots", async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request().query(`
+      SELECT s.location
+      FROM Spot s
+      WHERE s.location NOT IN (
+        SELECT v.location
+        FROM Vehicle v
+        WHERE v.location IS NOT NULL
+      )
+      ORDER BY s.location
+    `);
+    res.json(result.recordset.map((r) => r.location));
+  } catch (err) {
+    handleDbError(res, err);
+  }
+});
+
+// Vehicle Registration
+app.post("/api/vehicle_entry", async (req, res) => {
   const { plate_number, brand, location } = req.body;
   if (!plate_number || !location) {
     return res.status(400).json({ error: "Plate number and location is required" });
@@ -133,28 +157,30 @@ app.post("/api/vehicle-entry", async (req, res) => {
     // Check whether the selected location is not already occupied (Check Parking Spot Availability)
     const spotCheck = await pool
       .request()
-      .input("location", sql.Char(3), location)
+      .input("location", sql.Char(4), location)
       .query("SELECT plate_number FROM Vehicle WHERE location = @location");
     if (spotCheck.recordset.length > 0) {
       return res.status(409).json({ error: "This location is full for now" });
     }
 
-    // Insert Vehicle Entry
+    // Insert Vehicle in database
     await pool
       .request()
       .input("plate_number", sql.Char(9), plate_number)
       .input("brand", sql.VarChar(30), brand || null)
-      .input("location", sql.Char(3), location)
+      .input("location", sql.Char(4), location)
       .query(`
         INSERT INTO Vehicle (plate_number, entrance_time, brand, location)
         VALUES (@plate_number, GETDATE(), @brand, @location)
       `);
 
-    res.status(201).json({ message: "Vehicle entry has been successfully recorded" });
+    res.status(201).json({success:true, message: "Vehicle entry has been successfully recorded" });
   } catch (err) {
     handleDbError(res, err);
   }
 });
+
+
 
 // Get Vehicle information before exit confirmation (VehicleExit.tsx)
 app.get("/api/vehicle/:plate_number", async (req, res) => {
@@ -227,93 +253,4 @@ app.post("/api/vehicle-exit", async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Backend server is running on http://localhost:${PORT}`);
-});
-
-
-
-
-// ********************** Vehicle Entry *****************************
-
-
-// GET available parking spots (VehicleEntry.tsx)
-app.get("/api/vehicle_entry/available_spots", async (req, res) => {
-  try {
-    const pool = await poolPromise;
-    const result = await pool.request().query(`
-      SELECT s.location
-      FROM Spot s
-      WHERE s.location NOT IN (
-        SELECT v.location
-        FROM Vehicle v
-        WHERE v.location IS NOT NULL AND v.exit_time IS NULL
-      )
-      ORDER BY s.location
-    `);
-    res.json(result.recordset.map((r) => r.location));
-  } catch (err) {
-    handleDbError(res, err);
-  }
-});
-
-// Register vehicle entry (VehicleEntry.tsx)
-app.post("/api/vehicle_entry", async (req, res) => {
-  const { plate_number, location } = req.body;
-  if (!plate_number || !location) {
-    return res.status(400).json({ error: "Plate number and parking spot are required" });
-  }
-
-  try {
-    const pool = await poolPromise;
-
-    // A vehicle currently inside (no exit_time yet) can't enter again
-    const currentlyIn = await pool
-      .request()
-      .input("plate_number", sql.Char(9), plate_number)
-      .query(`SELECT plate_number FROM Vehicle WHERE plate_number = @plate_number AND exit_time IS NULL`);
-
-    if (currentlyIn.recordset.length > 0) {
-      return res.status(409).json({ error: "This vehicle is already parked" });
-    }
-
-    // The chosen spot must still be free (race condition guard)
-    const spotTaken = await pool
-      .request()
-      .input("location", sql.Char(3), location)
-      .query(`SELECT plate_number FROM Vehicle WHERE location = @location AND exit_time IS NULL`);
-
-    if (spotTaken.recordset.length > 0) {
-      return res.status(409).json({ error: "This spot was just taken, please pick another" });
-    }
-
-    // plate_number is the PK: a returning vehicle (old, exited row) needs UPDATE, not INSERT
-    const existingRow = await pool
-      .request()
-      .input("plate_number", sql.Char(9), plate_number)
-      .query(`SELECT plate_number FROM Vehicle WHERE plate_number = @plate_number`);
-
-    if (existingRow.recordset.length > 0) {
-      await pool
-        .request()
-        .input("plate_number", sql.Char(9), plate_number)
-        .input("location", sql.Char(3), location)
-        .query(`
-          UPDATE Vehicle
-          SET entrance_time = GETDATE(), exit_time = NULL, location = @location
-          WHERE plate_number = @plate_number
-        `);
-    } else {
-      await pool
-        .request()
-        .input("plate_number", sql.Char(9), plate_number)
-        .input("location", sql.Char(3), location)
-        .query(`
-          INSERT INTO Vehicle (plate_number, entrance_time, location)
-          VALUES (@plate_number, GETDATE(), @location)
-        `);
-    }
-
-    res.json({ success: true });
-  } catch (err) {
-    handleDbError(res, err);
-  }
 });
