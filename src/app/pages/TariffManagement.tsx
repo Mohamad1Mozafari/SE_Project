@@ -138,11 +138,7 @@ export function TariffManagement() {
             <div className="space-y-4 mt-4">
               <div className="space-y-2">
                 <Label htmlFor="edit-type">Tariff Type</Label>
-                <Input
-                  id="edit-type"
-                  value={editingTariff.type}
-                  onChange={(e) => setEditingTariff({ ...editingTariff, type: e.target.value })}
-                />
+                <div className="rounded-md border px-3 py-2 bg-gray-100 text-gray-700">{editingTariff.type}</div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-rate">Rate (TMN)</Label>
