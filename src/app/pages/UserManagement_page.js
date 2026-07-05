@@ -1,11 +1,5 @@
 // UserManagement_page.js
 
-// UserManagement_page.js
-
-// UserManagement_page.js
-
-// UserManagement_page.js
-// UserManagement_page.js
 export async function getUsers() {
   const response = await fetch("http://localhost:3000/api/user_management/get_all_userInfo", { 
     method: "GET" 
@@ -19,8 +13,6 @@ export async function getUsers() {
   return usersData; 
 }
 
-
-// ... rest of your deleteUser, editUser, addUser functions stay exactly the same
 export async function deleteUser(username) {
   try {
     const response = await fetch("http://localhost:3000/api/user_management/delete_user", {
@@ -42,10 +34,9 @@ export async function editUser(oldUser, newUser) {
     oldUser.name === newUser.name &&
     oldUser.role === newUser.role &&
     oldUser.email === newUser.email &&
-    oldUser.status === newUser.status && 
-    oldUser.password === newUser.password
+    (!newUser.password || newUser.password === "")
   ) {
-    return { success: false, message: "nothing changed" };
+    return { success: false, message: "No data modifications detected." };
   }
 
   try {
@@ -53,22 +44,22 @@ export async function editUser(oldUser, newUser) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        new_username: newUser.username, // Include username identifier context for updates
         old_username: oldUser.username,
+        new_username: newUser.username, 
         name: newUser.name,
-        role: newUser.role,
         email: newUser.email,
-        password : newUser.password
+        role: newUser.role,
+        password: newUser.password || "" 
       })
     });
     const check = await response.json();
     if (check === "success") {
       return { success: true };
     } else {
-      return { success: false, message: "error can not edit user" };
+      return { success: false, message: "Database rejected profile parameter updates." };
     }
   } catch (error) {
-    return { success: false, message: "Network error" };
+    return { success: false, message: "Network connection failure." };
   }
 }
 
@@ -80,19 +71,18 @@ export async function addUser(newUser) {
       body: JSON.stringify({
         username: newUser.username, 
         new_name: newUser.name,
-        new_role: newUser.role,
         email: newUser.email,
-        password : newUser.password
+        new_role: newUser.role,
+        password: newUser.password
       })
     });
     const check = await response.json();
     if (check === "success") {
       return { success: true };
     } else {
-      return { success: false, message: "error can not add user" };
+      return { success: false, message: "Server error: Check if username already exists." };
     }
   } catch (error) {
-    return { success: false, message: "Network error" };
+    return { success: false, message: "Network connection failure." };
   }
 }
-

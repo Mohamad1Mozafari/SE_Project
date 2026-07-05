@@ -8,91 +8,106 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { toast } from "sonner";
-import { getUsers } from "./UserManagement_page"; // Make sure this path correctly points to your file
+import { getUsers, addUser, editUser, deleteUser } from "./UserManagement_page";
 
-// Type definition for safe UI rendering
 interface User {
   id: string | number;
   username: string;
   name: string;
   email: string;
   role: string;
+  password?: string; // Optional field for runtime tracking during edits
 }
 
 export function UserManagement() {
-  // Initialize with an empty state array and a loading tracker
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [originalUser, setOriginalUser] = useState<User | null>(null); // Track original state for comparison
   const [newUser, setNewUser] = useState({ username: "", name: "", email: "", password: "", role: "Operator" });
 
-  // Hook to pull data on component lifecycle mount
-  useEffect(() => {
-    async function loadUserData() {
-      try {
-        setIsLoading(true);
-        const data = await getUsers();
-        
-        // Transform incoming DB model (username, full_name) to UI model (id, name)
-        const mappedUsers: User[] = data.map((dbUser: any) => ({
-          id: dbUser.username,
-          username: dbUser.username,
-          name: dbUser.full_name || "Unknown User",
-          email: dbUser.email,
-          role: dbUser.role
-        }));
+  // Load users from API on component mount
+  const loadUserData = async () => {
+    try {
+      setIsLoading(true);
+      const data = await getUsers();
+      
+      const mappedUsers: User[] = data.map((dbUser: any) => ({
+        id: dbUser.username,
+        username: dbUser.username,
+        name: dbUser.full_name || "Unknown User",
+        email: dbUser.email,
+        role: dbUser.role
+      }));
 
-        setUsers(mappedUsers);
-      } catch (error) {
-        console.error("Database connection error:", error);
-        toast.error("Failed to fetch users from database.");
-      } finally {
-        setIsLoading(false);
-      }
+      setUsers(mappedUsers);
+    } catch (error) {
+      console.error("Database connection error:", error);
+      toast.error("Failed to fetch users from database.");
+    } finally {
+      setIsLoading(false);
     }
+  };
 
+  useEffect(() => {
     loadUserData();
   }, []);
 
   const handleEdit = (user: User) => {
-    setEditingUser({ ...user });
+    setEditingUser({ ...user, password: "" });
+    setOriginalUser({ ...user }); // Save exact replica to pass as oldUser context to API
     setEditDialogOpen(true);
   };
 
-  const handleSaveEdit = () => {
-    if (editingUser) {
-      setUsers(users.map(u => u.id === editingUser.id ? editingUser : u));
+  const handleSaveEdit = async () => {
+    if (!editingUser || !originalUser) return;
+
+    // Call API Edit function
+    const response = await editUser(originalUser, editingUser);
+
+    if (response.success) {
       toast.success("User updated successfully");
       setEditDialogOpen(false);
       setEditingUser(null);
+      setOriginalUser(null);
+      loadUserData(); // Refresh local list state from server
+    } else {
+      toast.error(response.message || "Failed to update user");
     }
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!newUser.username || !newUser.name || !newUser.email || !newUser.password) {
       toast.error("Please fill in all required fields");
       return;
     }
-    // Using simple unique fallback generation for UI key optimization
-    const newId = newUser.username;
-    setUsers([...users, { 
-      id: newId, 
-      username: newUser.username,
-      name: newUser.name, 
-      email: newUser.email, 
-      role: newUser.role 
-    }]);
-    toast.success("User added successfully");
-    setAddDialogOpen(false);
-    setNewUser({ username: "", name: "", email: "", password: "", role: "Operator" });
+
+    // Call API Add function
+    const response = await addUser(newUser);
+
+    if (response.success) {
+      toast.success("User added successfully");
+      setAddDialogOpen(false);
+      setNewUser({ username: "", name: "", email: "", password: "", role: "Operator" });
+      loadUserData(); // Refresh local list state from server
+    } else {
+      toast.error(response.message || "Failed to add user");
+    }
   };
 
-  const handleDelete = (userId: string | number) => {
-    setUsers(users.filter(u => u.id !== userId));
-    toast.success("User deleted successfully");
+  const handleDelete = async (username: string) => {
+    const isDeleted = await deleteUser(username);
+
+    if (isDeleted) {
+      setUsers(users.filter(u => u.username !== username));
+      toast.success("User deleted successfully");
+    } else {
+      toast.error("Could not delete user from system");
+    }
   };
 
   const getRoleBadgeColor = (role: string) => {
@@ -241,7 +256,7 @@ export function UserManagement() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleDelete(user.id)}
+                              onClick={() => handleDelete(user.username)}
                             >
                               <Trash2 className="w-4 h-4 text-red-600" />
                             </Button>
@@ -359,6 +374,7 @@ export function UserManagement() {
                   id="edit-password"
                   type="password"
                   placeholder="Enter new password to change"
+                  value={editingUser.password || ""}
                   onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value })}
                 />
                 <p className="text-xs text-gray-500">Leave blank to keep current password</p>

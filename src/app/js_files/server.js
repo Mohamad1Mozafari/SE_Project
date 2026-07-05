@@ -65,8 +65,9 @@ app.post("/api/login", async (req, res) => {
 // or to map custom input roles to the respective DB sub-tables
 const VALID_ROLES = ['admin', 'operator', 'owner'];
 
+
+
 // 1. GET ALL USERS
-// server.js
 app.get("/api/user_management/get_all_userInfo", async (req, res) => {
   try {
     const pool = await poolPromise;
@@ -74,14 +75,13 @@ app.get("/api/user_management/get_all_userInfo", async (req, res) => {
     // Explicitly joining Account with Admin, Operator, and Owner sub-tables
     const result = await pool.request().query(`
       SELECT 
-        a.username, -- Used as our unique key/id
+        a.username, 
         a.full_name,
         a.email,
-        a.status,
         CASE 
           WHEN adm.username IS NOT NULL THEN 'Admin'
+          WHEN ow.username IS NOT NULL THEN 'Manager' -- Maps Owner table to 'Manager' UI Role
           WHEN op.username IS NOT NULL THEN 'Operator'
-          WHEN ow.username IS NOT NULL THEN 'Manager'
           ELSE 'Operator' 
         END AS role
       FROM Account a
@@ -118,7 +118,7 @@ app.post("/api/user_management/delete_user", async (req, res) => {
 // 3. EDIT USER
 app.post("/api/user_management/edit_user", async (req, res) => {
   try {
-    const { old_username, new_username, name, role  , password} = req.body;
+    const { old_username, new_username, name, email, role, password } = req.body;
     
     if (!old_username || !new_username) {
       return res.status(400).json({ error: "User identifiers missing" });
@@ -129,17 +129,31 @@ app.post("/api/user_management/edit_user", async (req, res) => {
 
     await transaction.begin();
     try {
-      // 1. Update primary account information
-      await transaction.request()
-        .input("old_username", sql.VarChar(20), old_username)
-        .input("new_username", sql.VarChar(20), new_username)
-        .input("name", sql.VarChar(50), name)
-        .input("password", sql.VarChar(50), name)
-        .query(`
-          UPDATE Account 
-          SET username = @new_username, full_name = @name  , password = @password
-          WHERE username = @old_username
-        `);
+      // 1. Update primary account information (fixed password typo & added email field)
+      if (password && password.trim() !== "") {
+        await transaction.request()
+          .input("old_username", sql.VarChar(20), old_username)
+          .input("new_username", sql.VarChar(20), new_username)
+          .input("name", sql.VarChar(50), name)
+          .input("email", sql.NVarChar(50), email)
+          .input("password", sql.NVarChar(255), password)
+          .query(`
+            UPDATE Account 
+            SET username = @new_username, full_name = @name, email = @email, password = @password
+            WHERE username = @old_username
+          `);
+      } else {
+        await transaction.request()
+          .input("old_username", sql.VarChar(20), old_username)
+          .input("new_username", sql.VarChar(20), new_username)
+          .input("name", sql.VarChar(50), name)
+          .input("email", sql.NVarChar(50), email)
+          .query(`
+            UPDATE Account 
+            SET username = @new_username, full_name = @name, email = @email
+            WHERE username = @old_username
+          `);
+      }
 
       // 2. Clear old role entries out of structural sub-tables
       await transaction.request().input("username", sql.VarChar(20), new_username).query(`
@@ -155,8 +169,8 @@ app.post("/api/user_management/edit_user", async (req, res) => {
           .query(`INSERT INTO Admin (username) VALUES (@username)`);
       } else if (cleanedRole === 'operator') {
         await transaction.request().input("username", sql.VarChar(20), new_username)
-          .query(`INSERT INTO Operator (username) VALUES (@username)`);
-      } else if (cleanedRole === 'owner') {
+          .query(`INSERT INTO Operator (username, join_date) VALUES (@username, GETDATE())`);
+      } else if (cleanedRole === 'manager' || cleanedRole === 'owner') {
         await transaction.request().input("username", sql.VarChar(20), new_username)
           .query(`INSERT INTO Owner (username) VALUES (@username)`);
       }
@@ -175,7 +189,7 @@ app.post("/api/user_management/edit_user", async (req, res) => {
 // 4. ADD USER
 app.post("/api/user_management/add_user", async (req, res) => {
   try {
-    const { username, new_name, new_role , password } = req.body;
+    const { username, new_name, email, new_role, password } = req.body;
     
     if (!username) return res.status(400).json({ error: "Username required" });
 
@@ -184,14 +198,15 @@ app.post("/api/user_management/add_user", async (req, res) => {
 
     await transaction.begin();
     try {
-      // 1. Create Base Account (Generating a default password placeholder)
+      // 1. Create Base Account (Added email field support)
       await transaction.request()
         .input("username", sql.VarChar(20), username)
         .input("password", sql.NVarChar(255), password) 
         .input("name", sql.VarChar(50), new_name)
+        .input("email", sql.NVarChar(50), email)
         .query(`
-          INSERT INTO Account (username, password, full_name) 
-          VALUES (@username, @password, @name)
+          INSERT INTO Account (username, password, full_name, email) 
+          VALUES (@username, @password, @name, @email)
         `);
 
       // 2. Bind specific role sub-table matching the input string
@@ -202,7 +217,7 @@ app.post("/api/user_management/add_user", async (req, res) => {
       } else if (cleanedRole === 'operator') {
         await transaction.request().input("username", sql.VarChar(20), username)
           .query(`INSERT INTO Operator (username, join_date) VALUES (@username, GETDATE())`);
-      } else if (cleanedRole === 'owner') {
+      } else if (cleanedRole === 'manager' || cleanedRole === 'owner') {
         await transaction.request().input("username", sql.VarChar(20), username)
           .query(`INSERT INTO Owner (username) VALUES (@username)`);
       }
@@ -217,7 +232,6 @@ app.post("/api/user_management/add_user", async (req, res) => {
     handleDbError(res, err);
   }
 });
-
 
 
 app.listen(PORT, () => {
