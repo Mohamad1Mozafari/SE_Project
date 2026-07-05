@@ -13,7 +13,30 @@ export default function UserManagement (){
 }
 
 function delete_user(){
+let response = await fetch("http://localhost:3000/edit_user",
+    {
 
+        method:"POST",
+
+        headers:{
+            "Content-Type":"application/json"
+        },
+
+        body: JSON.stringify({
+
+            "name":name,
+            "role":role ,
+            "email":email,
+            "status":status 
+
+        })
+    });
+    let check = await response.json();
+    if (check=="success"){
+
+    }else{
+        
+    }
 }
 function check_anithing_changed (old_name , old_role , new_role , new_name , new_email , new_status , old_email , old_status){
 if ( old_role == new_role && old_name==new_name && new_email == old_email && new_status == old_status){
