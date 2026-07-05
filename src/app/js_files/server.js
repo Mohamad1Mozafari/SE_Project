@@ -148,7 +148,7 @@ app.post("/api/vehicle_entry", async (req, res) => {
     // Check whether the Vehicle is not already in parking
     const plateCheck = await pool
       .request()
-      .input("plate_number", sql.Char(9), plate_number)
+      .input("plate_number", sql.Char(11), plate_number)
       .query("SELECT plate_number FROM Vehicle WHERE plate_number = @plate_number ;");
     if (plateCheck.recordset.length > 0) {
       return res.status(409).json({ error: "This Vehicle is Already in Parking" });
@@ -166,7 +166,7 @@ app.post("/api/vehicle_entry", async (req, res) => {
     // Insert Vehicle in database
     await pool
       .request()
-      .input("plate_number", sql.Char(9), plate_number)
+      .input("plate_number", sql.Char(11), plate_number)
       .input("brand", sql.VarChar(30), brand || null)
       .input("location", sql.Char(4), location)
       .query(`
@@ -190,7 +190,7 @@ app.get("/api/vehicle/:plate_number", async (req, res) => {
     const pool = await poolPromise;
     const vehicleResult = await pool
       .request()
-      .input("plate_number", sql.Char(9), plate_number)
+      .input("plate_number", sql.Char(11), plate_number)
       .query(`SELECT plate_number, entrance_time, location, brand
               FROM Vehicle
               WHERE plate_number = @plate_number`);
@@ -242,7 +242,7 @@ app.post("/api/vehicle-exit", async (req, res) => {
     const pool = await poolPromise;
     const result = await pool
       .request()
-      .input("plate_number", sql.Char(9), plate_number)
+      .input("plate_number", sql.Char(11), plate_number)
       .execute("RegisterVehicleExit");
 
     res.json(result.recordset[0]); // { EntranceTime, ExitTime, DurationHours, TotalCost }

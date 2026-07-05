@@ -34,6 +34,12 @@ export function VehicleEntry() {
       return;
     }
 
+    const platePattern = /^\d{2}-[A-Z]-\d{3}-\d{2}$/;
+    if (!platePattern.test(plateNumber)) {
+        toast.error("Plate number must be in format: 12-B-345-67");
+        return;
+    }
+
     setIsSaving(true);
     const isSuccess = await vehicle_entry_handler(plateNumber, parkingSpot);
     setIsSaving(false);
@@ -77,7 +83,7 @@ export function VehicleEntry() {
                       id="plateNumber"
                       placeholder="e.g., 12B345-51"
                       value={plateNumber}
-                      maxLength={9}
+                      maxLength={11}
                       onChange={(e) => setPlateNumber(e.target.value.toUpperCase())}
                       required
                       disabled={isSaving}
