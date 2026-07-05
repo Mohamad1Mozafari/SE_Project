@@ -59,29 +59,30 @@ app.post("/api/login", async (req, res) => {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // server.js or your routes file
-import sql from 'mssql'; // or const sql = require('mssql');
+
 
 // Helper to deduce a user's role string based on sub-table presence
 // or to map custom input roles to the respective DB sub-tables
 const VALID_ROLES = ['admin', 'operator', 'owner'];
 
 // 1. GET ALL USERS
-app.post("/api/user_management/get_all_userInfo", async (req, res) => {
+// server.js
+app.get("/api/user_management/get_all_userInfo", async (req, res) => {
   try {
     const pool = await poolPromise;
     
     // Explicitly joining Account with Admin, Operator, and Owner sub-tables
     const result = await pool.request().query(`
       SELECT 
-        a.username,
+        a.username, -- Used as our unique key/id
         a.full_name,
         a.email,
         a.status,
         CASE 
           WHEN adm.username IS NOT NULL THEN 'Admin'
           WHEN op.username IS NOT NULL THEN 'Operator'
-          WHEN ow.username IS NOT NULL THEN 'Manager' -- Maps 'Owner' table to 'Manager' UI role
-          ELSE 'Operator'                             -- Fallback role if not found in any
+          WHEN ow.username IS NOT NULL THEN 'Manager'
+          ELSE 'Operator' 
         END AS role
       FROM Account a
       LEFT JOIN Admin adm ON a.username = adm.username

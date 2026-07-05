@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ArrowRight, UserPlus, Edit, Trash2, Shield, UserCog } from "lucide-react";
+import { ArrowRight, UserPlus, Edit, Trash2, Shield, UserCog, Loader2 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -7,94 +7,84 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../co
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { Badge } from "../components/ui/badge";
 import { toast } from "sonner";
+import { getUsers } from "./UserManagement_page"; // Make sure this path correctly points to your file
 
-// Import your API methods (Adjust the relative path to match your project directory)
-import { getUsers, addUser, editUser, deleteUser } from "./UserManagement_page";
-
-// Define an interface matching your real backend user data structure
+// Type definition for safe UI rendering
 interface User {
-  username: string; // Used as the primary key for queries
+  id: string | number;
   name: string;
   email: string;
   role: string;
-  status: string;
-  lastLogin: string;
 }
 
 export function UserManagement() {
+  // Initialize with an empty state array and a loading tracker
   const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [originalUser, setOriginalUser] = useState<User | null>(null); // Keep track of pre-edit values
-  const [newUser, setNewUser] = useState({ username: "", name: "", email: "", role: "Operator", status: "Active" });
+  const [newUser, setNewUser] = useState({ name: "", email: "", role: "Operator" });
 
-  // Fetch users on component mount
+  // Hook to pull data on component lifecycle mount
   useEffect(() => {
-    fetchUsersList();
+    async function loadUserData() {
+      try {
+        setIsLoading(true);
+        const data = await getUsers();
+        
+        // Transform incoming DB model (username, full_name) to UI model (id, name)
+        const mappedUsers: User[] = data.map((dbUser: any) => ({
+          id: dbUser.username, 
+          name: dbUser.full_name || "Unknown User",
+          email: dbUser.email,
+          role: dbUser.role
+        }));
+
+        setUsers(mappedUsers);
+      } catch (error) {
+        console.error("Database connection error:", error);
+        toast.error("Failed to fetch users from database.");
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadUserData();
   }, []);
 
-  const fetchUsersList = async () => {
-    try {
-      setLoading(true);
-      const data = await getUsers();
-      setUsers(data);
-    } catch (error) {
-      toast.error("Failed to load users from system");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleEdit = (user: User) => {
-    setOriginalUser({ ...user });
     setEditingUser({ ...user });
     setEditDialogOpen(true);
   };
 
-  const handleSaveEdit = async () => {
-    if (!editingUser || !originalUser) return;
-
-    const res = await editUser(originalUser, editingUser);
-    if (res.success) {
+  const handleSaveEdit = () => {
+    if (editingUser) {
+      setUsers(users.map(u => u.id === editingUser.id ? editingUser : u));
       toast.success("User updated successfully");
       setEditDialogOpen(false);
       setEditingUser(null);
-      setOriginalUser(null);
-      fetchUsersList(); // Refresh data from backend to ensure alignment
-    } else {
-      toast.error(res.message || "Could not update user");
     }
   };
 
-  const handleAdd = async () => {
-    if (!newUser.username || !newUser.name || !newUser.email) {
-      toast.error("Please fill in all required fields (including Username)");
+  const handleAdd = () => {
+    if (!newUser.name || !newUser.email) {
+      toast.error("Please fill in all required fields");
       return;
     }
-
-    const res = await addUser(newUser);
-    if (res.success) {
-      toast.success("User added successfully");
-      setAddDialogOpen(false);
-      setNewUser({ username: "", name: "", email: "", role: "Operator", status: "Active" });
-      fetchUsersList(); // Refresh list
-    } else {
-      toast.error(res.message || "Could not add user");
-    }
+    // Using simple unique fallback generation for UI key optimization
+    const newId = newUser.email.split('@')[0];
+    setUsers([...users, { id: newId, name: newUser.name, email: newUser.email, role: newUser.role }]);
+    toast.success("User added successfully");
+    setAddDialogOpen(false);
+    setNewUser({ name: "", email: "", role: "Operator" });
   };
 
-  const handleDelete = async (username: string) => {
-    const success = await deleteUser(username);
-    if (success) {
-      toast.success("User deleted successfully");
-      fetchUsersList(); // Refresh list
-    } else {
-      toast.error("Failed to delete user");
-    }
+  const handleDelete = (userId: string | number) => {
+    setUsers(users.filter(u => u.id !== userId));
+    toast.success("User deleted successfully");
   };
 
   const getRoleBadgeColor = (role: string) => {
@@ -135,15 +125,6 @@ export function UserManagement() {
               </DialogHeader>
               <div className="space-y-4 mt-4">
                 <div className="space-y-2">
-                  <Label htmlFor="new-username">Username</Label>
-                  <Input
-                    id="new-username"
-                    placeholder="e.g., john_doe"
-                    value={newUser.username}
-                    onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
                   <Label htmlFor="new-name">Full Name</Label>
                   <Input
                     id="new-name"
@@ -175,18 +156,6 @@ export function UserManagement() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="new-status">Status</Label>
-                  <Select value={newUser.status} onValueChange={(value) => setNewUser({ ...newUser, status: value })}>
-                    <SelectTrigger id="new-status">
-                      <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Active">Active</SelectItem>
-                      <SelectItem value="Inactive">Inactive</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
                 <Button onClick={handleAdd} className="w-full">
                   <UserPlus className="w-4 h-4 mr-2" />
                   Add User
@@ -198,7 +167,7 @@ export function UserManagement() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* User List */}
+        {/* User List Layout Card */}
         <div className="lg:col-span-2">
           <Card>
             <CardHeader>
@@ -206,10 +175,11 @@ export function UserManagement() {
               <CardDescription>All registered users and their roles</CardDescription>
             </CardHeader>
             <CardContent>
-              {loading ? (
-                <div className="text-center py-6 text-gray-500">Loading user records...</div>
-              ) : users.length === 0 ? (
-                <div className="text-center py-6 text-gray-500">No users found.</div>
+              {isLoading ? (
+                <div className="flex flex-col items-center justify-center p-12 text-gray-500 space-y-3">
+                  <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+                  <p className="text-sm">Fetching active configuration parameters...</p>
+                </div>
               ) : (
                 <Table>
                   <TableHeader>
@@ -217,30 +187,19 @@ export function UserManagement() {
                       <TableHead>Name</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Role</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Last Login</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {users.map((user) => (
-                      <TableRow key={user.username}>
-                        <TableCell className="font-medium">
-                          <div>{user.name}</div>
-                          <div className="text-xs text-gray-400 font-normal">@{user.username}</div>
-                        </TableCell>
+                      <TableRow key={user.id}>
+                        <TableCell className="font-medium">{user.name}</TableCell>
                         <TableCell className="text-gray-600">{user.email}</TableCell>
                         <TableCell>
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(user.role)}`}>
                             {user.role}
                           </span>
                         </TableCell>
-                        <TableCell>
-                          <Badge variant={user.status === "Active" ? "default" : "secondary"}>
-                            {user.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-sm text-gray-500">{user.lastLogin}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex gap-2 justify-end">
                             <Button
@@ -253,7 +212,7 @@ export function UserManagement() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleDelete(user.username)}
+                              onClick={() => handleDelete(user.id)}
                             >
                               <Trash2 className="w-4 h-4 text-red-600" />
                             </Button>
@@ -268,7 +227,7 @@ export function UserManagement() {
           </Card>
         </div>
 
-        {/* Info Panel */}
+        {/* Info Sidebar Section */}
         <div className="space-y-6">
           <Card>
             <CardHeader>
@@ -278,12 +237,6 @@ export function UserManagement() {
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">Total Users</span>
                 <span className="font-semibold">{users.length}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Active Users</span>
-                <span className="font-semibold text-green-600">
-                  {users.filter(u => u.status === "Active").length}
-                </span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">Administrators</span>
@@ -337,7 +290,7 @@ export function UserManagement() {
         </div>
       </div>
 
-      {/* Edit Dialog */}
+      {/* Edit Dialog Form modal view */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -373,18 +326,6 @@ export function UserManagement() {
                     <SelectItem value="Admin">Admin</SelectItem>
                     <SelectItem value="Manager">Manager</SelectItem>
                     <SelectItem value="Operator">Operator</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-status">Status</Label>
-                <Select value={editingUser.status} onValueChange={(value) => setEditingUser({ ...editingUser, status: value })}>
-                  <SelectTrigger id="edit-status">
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Active">Active</SelectItem>
-                    <SelectItem value="Inactive">Inactive</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

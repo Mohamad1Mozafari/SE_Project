@@ -4,47 +4,20 @@
 
 // UserManagement_page.js
 
+// UserManagement_page.js
+// UserManagement_page.js
 export async function getUsers() {
-  try {
-    const response = await fetch("http://localhost:3000/api/user_management/get_all_userInfo", { 
-      method: "GET" 
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Server responded with status: ${response.status}`);
-    }
-
-    const usersData = await response.json();
-    
-    // Safety check: prioritize checking if usersData itself is the array
-    let usersArray = [];
-    if (Array.isArray(usersData)) {
-      usersArray = usersData;
-    } else if (usersData && Array.isArray(usersData.recordset)) {
-      usersArray = usersData.recordset;
-    } else if (usersData) {
-      usersArray = [usersData];
-    }
-
-    // Map database properties directly to the UI structure
-    const formattedUsers = usersArray.map((user) => {
-      return {
-        username: user.username || "",
-        name: user.full_name || user.name || "", 
-        email: user.email || "",
-        role: user.role || "Operator", 
-        status: user.status === "active" || user.status === "Active" ? "Active" : "Inactive",
-        lastLogin: user.lastLogin || "Never" // Fallback since UI interface expects lastLogin
-      };
-    });
-
-    return formattedUsers;
-  } catch (error) {
-    console.error("Failed to fetch users:", error);
-    return []; // Return an empty array so UI loading terminates cleanly without breaking hooks
+  const response = await fetch("http://localhost:3000/api/user_management/get_all_userInfo", { 
+    method: "GET" 
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Server responded with status: ${response.status}`);
   }
-}
 
+  const usersData = await response.json();
+  return usersData; 
+}
 // ... rest of your deleteUser, editUser, addUser functions stay exactly the same
 export async function deleteUser(username) {
   try {
