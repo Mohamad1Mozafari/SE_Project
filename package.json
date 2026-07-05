@@ -45,7 +45,7 @@
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "lucide-react": "^0.268.0",
-    "mssql": "^12.5.5",
+    "mssql": "^12.7.0",
     "next-themes": "^0.4.6",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
@@ -91,5 +91,12 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
     }
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://hamgit.ir/software-engineering/parking-management-system.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }

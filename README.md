@@ -66,3 +66,9 @@ repository](https://github.com/PurpleBooth/a-good-readme-template/tags).
 ## License
 
 This project is licensed under the [MIT License](LICENSE.md) - see the [LICENSE.md](LICENSE.md) file for details
+
+## to run 
+npm start
+npm run electron 
+cd \src\app\js_files
+node server.js
