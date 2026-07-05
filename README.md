@@ -11,15 +11,19 @@ The project focuses on collaboration, AGILE methodolgy, and key software enginee
 These instructions will give you a copy of the project up and running on
 your local machine for testing purposes.
 
+If you are intereseted in merely running the program, a packaged windows application is also presented with the project. You can download the x64 exe package [here]()
+
 ### Prerequisites
 
 The project is written using multiple web technologies and uses Electron for packaging the web-app into a local Windows application. For the best compatibility, make sure that your tools' versions matches the ones that the project was developed with.
 
 Requirements for running the project are:
 
-- [NPM](https://www.npmjs.com/)
+- [Node.js](https://nodejs.org/en)
+
+Dependencies for the project are:
+
 - [React](https://react.dev/)
-- [TypeScript](https://www.typescriptlang.org/)
 - [Electron](https://www.electronjs.org/)
 
 ### Cloning the project
@@ -38,13 +42,75 @@ Switch to the directory which houses the files:
 
 You then need to install the additional requirements.
 
-### Installing NPM
+### Installing Nodejs
+
+Instructions for installing nodejs differ from OS to OS and from architecture to architecture. Follow the official nodejs help  to see a tutorial based on your needs.
+
+[Download Nodejs](https://nodejs.org/en/download)
 
 ### Install dependencies
 
+After setting up node.js on your machine, the next step is to install the project dependencies. To do so make sure you are in the project root. Then run:
+
+  ```
+  npm install
+  ```
+  or:
+  ```
+  npm ci
+  ```
+
+to install the dependencies. This may take a while. After this, you can now run the projct
+
 ## Running the project
 
-## Examples
+To run the project, make sure you are in the project's root directory then execute:
+
+  ```
+  npm start
+  ```
+
+You should see an output like:
+
+  ```
+  OTHER_DIRECTORY/parking-management-system$ npm start
+
+    > parking-management-system@1.0.0 start
+    > vite
+
+    The CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.
+
+    VITE v5.4.21  ready in 383 ms
+
+    ➜  Local:   http://localhost:5173/
+    ➜  Network: use --host to expose
+    ➜  press h + enter to show help
+
+  ```
+
+You can now access the project through your web browser by going to the URL displayed in the output. In this case: ```http://localhost:5173/```
+
+![Example of running the project in a web browser](images/ui/example_running_webbrowser.png)
+
+If you prefer to run the project in application mode, then while **the localhost is up and running, in another terminal session,** run the command:
+
+  ```
+  npm run electron
+  ```
+
+This will display the project as a local app.
+
+## User Manual
+
+We have compiled a thorough and rigorous guide to introduce our users to the given software and familiarize them with what the project has to offer.
+
+[Click here]() to be redirected to the User Manual.
+
+## FAQ
+
+We have compiled a handful of **Frequently Asked Questions** one might ask when using the software.
+
+[Click here]() to be redirected to our FAQ.
 
 ## Built With
 
