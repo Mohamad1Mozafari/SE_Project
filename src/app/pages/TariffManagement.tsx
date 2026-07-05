@@ -1,26 +1,21 @@
 import { useState } from "react";
-import { ArrowRight, DollarSign, Edit, Plus, Save } from "lucide-react";
+import { ArrowRight, DollarSign, Edit, Save } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { toast } from "sonner";
 
 export function TariffManagement() {
   const [tariffs, setTariffs] = useState([
-    { id: 1, type: "Hourly", rate: 5.0, description: "Standard hourly rate" },
-    { id: 2, type: "Daily Max", rate: 40.0, description: "Maximum daily charge" },
-    { id: 3, type: "Weekend", rate: 3.0, description: "Weekend hourly rate" },
-    { id: 4, type: "Monthly Pass", rate: 250.0, description: "Monthly unlimited access" },
-    { id: 5, type: "Grace Period", rate: 0.0, description: "First 15 minutes free" },
+    { id: 1, type: "Entrance fee", rate: 80.00, description: "First hour entrance" },
+    { id: 2, type: "Hourly", rate: 40.00, description: "Houtly fee after the first hour" },
   ]);
 
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editingTariff, setEditingTariff] = useState<any>(null);
-  const [newTariff, setNewTariff] = useState({ type: "", rate: 0, description: "" });
 
   const handleEdit = (tariff: any) => {
     setEditingTariff({ ...tariff });
@@ -34,18 +29,6 @@ export function TariffManagement() {
       setEditDialogOpen(false);
       setEditingTariff(null);
     }
-  };
-
-  const handleAdd = () => {
-    if (!newTariff.type || !newTariff.description) {
-      toast.error("Please fill in all fields");
-      return;
-    }
-    const newId = Math.max(...tariffs.map(t => t.id)) + 1;
-    setTariffs([...tariffs, { ...newTariff, id: newId }]);
-    toast.success("Tariff added successfully");
-    setAddDialogOpen(false);
-    setNewTariff({ type: "", rate: 0, description: "" });
   };
 
   return (
@@ -63,55 +46,6 @@ export function TariffManagement() {
             <h1 className="text-3xl font-bold text-gray-900">Tariff Management</h1>
             <p className="text-gray-600 mt-1">Manage parking rates and pricing</p>
           </div>
-          <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Tariff
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add New Tariff</DialogTitle>
-                <DialogDescription>Create a new tariff type and rate</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 mt-4">
-                <div className="space-y-2">
-                  <Label htmlFor="new-type">Tariff Type</Label>
-                  <Input
-                    id="new-type"
-                    placeholder="e.g., Evening Rate"
-                    value={newTariff.type}
-                    onChange={(e) => setNewTariff({ ...newTariff, type: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="new-rate">Rate ($)</Label>
-                  <Input
-                    id="new-rate"
-                    type="number"
-                    step="0.01"
-                    placeholder="0.00"
-                    value={newTariff.rate}
-                    onChange={(e) => setNewTariff({ ...newTariff, rate: parseFloat(e.target.value) || 0 })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="new-description">Description</Label>
-                  <Input
-                    id="new-description"
-                    placeholder="Description of tariff"
-                    value={newTariff.description}
-                    onChange={(e) => setNewTariff({ ...newTariff, description: e.target.value })}
-                  />
-                </div>
-                <Button onClick={handleAdd} className="w-full">
-                  <Save className="w-4 h-4 mr-2" />
-                  Add Tariff
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
         </div>
       </div>
 
@@ -139,7 +73,7 @@ export function TariffManagement() {
                       <TableCell className="font-medium">{tariff.type}</TableCell>
                       <TableCell className="text-gray-600">{tariff.description}</TableCell>
                       <TableCell className="text-right font-semibold">
-                        ${tariff.rate.toFixed(2)}
+                        {tariff.rate.toFixed(2)} TMN
                       </TableCell>
                       <TableCell className="text-right">
                         <Button
@@ -169,20 +103,12 @@ export function TariffManagement() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Base Hourly</span>
-                <span className="font-semibold">$5.00</span>
+                <span className="text-sm text-gray-600">Entrance fee</span>
+                <span className="font-semibold">80.00 TMN</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Daily Max</span>
-                <span className="font-semibold">$40.00</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Weekend Rate</span>
-                <span className="font-semibold">$3.00/hr</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Monthly Pass</span>
-                <span className="font-semibold">$250.00</span>
+                <span className="text-sm text-gray-600">Hourly</span>
+                <span className="font-semibold">40.00 TMN</span>
               </div>
             </CardContent>
           </Card>
@@ -219,13 +145,19 @@ export function TariffManagement() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit-rate">Rate ($)</Label>
+                <Label htmlFor="edit-rate">Rate (TMN)</Label>
                 <Input
                   id="edit-rate"
                   type="number"
-                  step="0.01"
+                  min={0}
+                  step="5"
                   value={editingTariff.rate}
-                  onChange={(e) => setEditingTariff({ ...editingTariff, rate: parseFloat(e.target.value) || 0 })}
+                  onChange={(e) =>
+                    setEditingTariff({
+                      ...editingTariff,
+                      rate: Math.max(0, Number(e.target.value) || 0)
+                    })
+                  }
                 />
               </div>
               <div className="space-y-2">
