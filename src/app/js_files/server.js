@@ -1,4 +1,4 @@
-const express = require("express");
+//server.js
 const cors = require("cors");
 const { sql, poolPromise } = require("./db");
 
@@ -72,7 +72,6 @@ app.get("/api/user_management/get_all_userInfo", async (req, res) => {
   try {
     const pool = await poolPromise;
     
-    // Explicitly joining Account with Admin, Operator, and Owner sub-tables
     const result = await pool.request().query(`
       SELECT 
         a.username, 
@@ -80,7 +79,7 @@ app.get("/api/user_management/get_all_userInfo", async (req, res) => {
         a.email,
         CASE 
           WHEN adm.username IS NOT NULL THEN 'Admin'
-          WHEN ow.username IS NOT NULL THEN 'Manager' -- Maps Owner table to 'Manager' UI Role
+          WHEN ow.username IS NOT NULL THEN 'Manager'
           WHEN op.username IS NOT NULL THEN 'Operator'
           ELSE 'Operator' 
         END AS role
@@ -96,6 +95,19 @@ app.get("/api/user_management/get_all_userInfo", async (req, res) => {
   }
 });
 
+// Helper Function: Check if username is unique
+async function check_username_unique(username) {
+  const pool = await poolPromise;
+  const result = await pool.request()
+    .input("username", sql.VarChar(20), username)
+    .query(`SELECT username FROM Account WHERE username = @username`);
+  
+  if (result.recordset.length > 0) {
+    return { unique: false, message: "username used and not unique" };
+  }
+  return { unique: true, message: "username is unique" };
+}
+
 // 2. DELETE USER
 app.post("/api/user_management/delete_user", async (req, res) => {
   try {
@@ -104,7 +116,6 @@ app.post("/api/user_management/delete_user", async (req, res) => {
 
     const pool = await poolPromise;
     
-    // Cascading deletes in schema will auto-clean sub-tables (Operator, Owner, Admin)
     await pool.request()
       .input("username", sql.VarChar(20), username)
       .query(`DELETE FROM Account WHERE username = @username`);
@@ -115,13 +126,13 @@ app.post("/api/user_management/delete_user", async (req, res) => {
   }
 });
 
-// 3. EDIT USER
+// 3. EDIT USER (Fixed transaction error throwing and tracking)
 app.post("/api/user_management/edit_user", async (req, res) => {
   try {
-    const { old_username, new_username, name, email, role, password } = req.body;
+    const { username, name, email, role, password } = req.body;
     
-    if (!old_username || !new_username) {
-      return res.status(400).json({ error: "User identifiers missing" });
+    if (!username) {
+      return res.status(400).json({ error: "Username identifier missing" });
     }
 
     const pool = await poolPromise;
@@ -129,57 +140,65 @@ app.post("/api/user_management/edit_user", async (req, res) => {
 
     await transaction.begin();
     try {
-      // 1. Update primary account information (fixed password typo & added email field)
+      const request = new sql.Request(transaction);
+
+      // Bind basic parameters
+      request.input("username", sql.VarChar(20), username);
+      request.input("name", sql.VarChar(50), name);
+      request.input("email", sql.NVarChar(50), email);
+
+      // 1. Update core Account information
       if (password && password.trim() !== "") {
-        await transaction.request()
-          .input("old_username", sql.VarChar(20), old_username)
-          .input("new_username", sql.VarChar(20), new_username)
-          .input("name", sql.VarChar(50), name)
-          .input("email", sql.NVarChar(50), email)
-          .input("password", sql.NVarChar(255), password)
-          .query(`
-            UPDATE Account 
-            SET username = @new_username, full_name = @name, email = @email, password = @password
-            WHERE username = @old_username
-          `);
+        request.input("password", sql.NVarChar(255), password);
+        await request.query(`
+          UPDATE Account 
+          SET full_name = @name, email = @email, password = @password
+          WHERE username = @username
+        `);
       } else {
-        await transaction.request()
-          .input("old_username", sql.VarChar(20), old_username)
-          .input("new_username", sql.VarChar(20), new_username)
-          .input("name", sql.VarChar(50), name)
-          .input("email", sql.NVarChar(50), email)
-          .query(`
-            UPDATE Account 
-            SET username = @new_username, full_name = @name, email = @email
-            WHERE username = @old_username
-          `);
+        await request.query(`
+          UPDATE Account 
+          SET full_name = @name, email = @email
+          WHERE username = @username
+        `);
       }
 
-      // 2. Clear old role entries out of structural sub-tables
-      await transaction.request().input("username", sql.VarChar(20), new_username).query(`
-        DELETE FROM Admin WHERE username = @username;
-        DELETE FROM Operator WHERE username = @username;
-        DELETE FROM Owner WHERE username = @username;
-      `);
+      // 2. Handle Role Changes safely
+      if (role) {
+        const cleanedRole = role.toLowerCase();
 
-      // 3. Insert user context into the newly mapped target role table
-      const cleanedRole = role?.toLowerCase();
-      if (cleanedRole === 'admin') {
-        await transaction.request().input("username", sql.VarChar(20), new_username)
-          .query(`INSERT INTO Admin (username) VALUES (@username)`);
-      } else if (cleanedRole === 'operator') {
-        await transaction.request().input("username", sql.VarChar(20), new_username)
-          .query(`INSERT INTO Operator (username, join_date) VALUES (@username, GETDATE())`);
-      } else if (cleanedRole === 'manager' || cleanedRole === 'owner') {
-        await transaction.request().input("username", sql.VarChar(20), new_username)
-          .query(`INSERT INTO Owner (username) VALUES (@username)`);
+        // Remove from all child tables first safely
+        await request.query(`
+          DELETE FROM Admin WHERE username = @username;
+          DELETE FROM Operator WHERE username = @username;
+          DELETE FROM Owner WHERE username = @username;
+        `);
+
+        // Re-insert into the single target role table
+        if (cleanedRole === 'admin') {
+          await request.query(`INSERT INTO Admin (username) VALUES (@username)`);
+        } else if (cleanedRole === 'operator') {
+          await request.query(`INSERT INTO Operator (username, join_date) VALUES (@username, GETDATE())`);
+        } else if (cleanedRole === 'manager' || cleanedRole === 'owner') {
+          await request.query(`INSERT INTO Owner (username) VALUES (@username)`);
+        }
       }
 
       await transaction.commit();
       res.json("success");
     } catch (txErr) {
-      await transaction.rollback();
-      throw txErr;
+      // Safe rollback execution
+      try {
+        await transaction.rollback();
+      } catch (rollbackErr) {
+        console.error("Rollback failed:", rollbackErr.message);
+      }
+      
+      // Log the exact schema constraint issue to your backend terminal
+      console.error("DUE TO DB SCHEMA RULE CONSTRAINT:", txErr.message);
+      
+      // Crucial Fix: Use handleDbError immediately instead of re-throwing
+      return handleDbError(res, txErr);
     }
   } catch (err) {
     handleDbError(res, err);
@@ -192,13 +211,18 @@ app.post("/api/user_management/add_user", async (req, res) => {
     const { username, new_name, email, new_role, password } = req.body;
     
     if (!username) return res.status(400).json({ error: "Username required" });
+    
+    // Check uniqueness (Fixed async/await invocation syntax)
+    const checkStatus = await check_username_unique(username); 
+    if (!checkStatus.unique) {
+      return res.status(200).json("failed username is used");
+    }
 
     const pool = await poolPromise;
     const transaction = new sql.Transaction(pool);
 
     await transaction.begin();
     try {
-      // 1. Create Base Account (Added email field support)
       await transaction.request()
         .input("username", sql.VarChar(20), username)
         .input("password", sql.NVarChar(255), password) 
@@ -209,7 +233,6 @@ app.post("/api/user_management/add_user", async (req, res) => {
           VALUES (@username, @password, @name, @email)
         `);
 
-      // 2. Bind specific role sub-table matching the input string
       const cleanedRole = new_role?.toLowerCase();
       if (cleanedRole === 'admin') {
         await transaction.request().input("username", sql.VarChar(20), username)
@@ -232,7 +255,6 @@ app.post("/api/user_management/add_user", async (req, res) => {
     handleDbError(res, err);
   }
 });
-
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

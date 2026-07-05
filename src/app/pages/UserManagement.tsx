@@ -1,3 +1,5 @@
+// UserManagement.tsx
+
 import { useState, useEffect } from "react";
 import { ArrowRight, UserPlus, Edit, Trash2, Shield, UserCog, Loader2 } from "lucide-react";
 import { Button } from "../components/ui/button";
@@ -113,7 +115,7 @@ export function UserManagement() {
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
       case "Admin": return "bg-purple-100 text-purple-700";
-      case "Manager": return "bg-blue-100 text-blue-700";
+      case "owner": return "bg-blue-100 text-blue-700";
       case "Operator": return "bg-green-100 text-green-700";
       default: return "bg-gray-100 text-gray-700";
     }
@@ -193,7 +195,7 @@ export function UserManagement() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Admin">Admin</SelectItem>
-                      <SelectItem value="Manager">Manager</SelectItem>
+                      <SelectItem value="owner">owner</SelectItem>
                       <SelectItem value="Operator">Operator</SelectItem>
                     </SelectContent>
                   </Select>
@@ -310,7 +312,7 @@ export function UserManagement() {
                 <p className="text-xs text-gray-600">Full system access and configuration</p>
               </div>
               <div>
-                <p className="font-medium text-sm mb-2">Manager</p>
+                <p className="font-medium text-sm mb-2">owner</p>
                 <p className="text-xs text-gray-600">Reports, users, and operations</p>
               </div>
               <div>
@@ -343,14 +345,6 @@ export function UserManagement() {
           </DialogHeader>
           {editingUser && (
             <div className="space-y-4 mt-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-username">Username</Label>
-                <Input
-                  id="edit-username"
-                  value={editingUser.username}
-                  onChange={(e) => setEditingUser({ ...editingUser, username: e.target.value })}
-                />
-              </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-name">Full Name</Label>
                 <Input
@@ -387,7 +381,7 @@ export function UserManagement() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Admin">Admin</SelectItem>
-                    <SelectItem value="Manager">Manager</SelectItem>
+                    <SelectItem value="owner">owner</SelectItem>
                     <SelectItem value="Operator">Operator</SelectItem>
                   </SelectContent>
                 </Select>

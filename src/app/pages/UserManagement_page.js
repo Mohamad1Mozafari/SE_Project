@@ -9,8 +9,7 @@ export async function getUsers() {
     throw new Error(`Server responded with status: ${response.status}`);
   }
 
-  const usersData = await response.json();
-  return usersData; 
+  return await response.json(); 
 }
 
 export async function deleteUser(username) {
@@ -30,11 +29,10 @@ export async function deleteUser(username) {
 
 export async function editUser(oldUser, newUser) {
   if (
-    oldUser.username === newUser.username &&
     oldUser.name === newUser.name &&
     oldUser.role === newUser.role &&
     oldUser.email === newUser.email &&
-    (!newUser.password || newUser.password === "")
+    (!newUser.password || newUser.password === "")// check this one 
   ) {
     return { success: false, message: "No data modifications detected." };
   }
@@ -44,12 +42,12 @@ export async function editUser(oldUser, newUser) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        old_username: oldUser.username,
-        new_username: newUser.username, 
+        // username: newUser.username, // Remains static identifier
+        username: oldUser.username,
         name: newUser.name,
         email: newUser.email,
         role: newUser.role,
-        password: newUser.password || "" 
+        password: newUser.password || ""// if (newuser === '') -> ''_ false || ""
       })
     });
     const check = await response.json();
@@ -79,8 +77,10 @@ export async function addUser(newUser) {
     const check = await response.json();
     if (check === "success") {
       return { success: true };
+    } else if (check === "failed username is used") {
+      return { success: false, message: "Username is already taken. Choose another one." };
     } else {
-      return { success: false, message: "Server error: Check if username already exists." };
+      return { success: false, message: "Server error occurred while adding user." };
     }
   } catch (error) {
     return { success: false, message: "Network connection failure." };
