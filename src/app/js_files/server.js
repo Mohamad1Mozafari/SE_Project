@@ -111,8 +111,32 @@ app.get("/api/recent-activity", async (req, res) => {
   }
 });
 
-// VehicleEntry.tsx
-app.post("/api/vehicle-entry", async (req, res) => {
+
+
+// * Vehicle Entry (VehicleEntry.tsx) *
+
+// GET available parking spots
+app.get("/api/vehicle_entry/available_spots", async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request().query(`
+      SELECT s.location
+      FROM Spot s
+      WHERE s.location NOT IN (
+        SELECT v.location
+        FROM Vehicle v
+        WHERE v.location IS NOT NULL
+      )
+      ORDER BY s.location
+    `);
+    res.json(result.recordset.map((r) => r.location));
+  } catch (err) {
+    handleDbError(res, err);
+  }
+});
+
+// Vehicle Registration
+app.post("/api/vehicle_entry", async (req, res) => {
   const { plate_number, brand, location } = req.body;
   if (!plate_number || !location) {
     return res.status(400).json({ error: "Plate number and location is required" });
@@ -133,28 +157,30 @@ app.post("/api/vehicle-entry", async (req, res) => {
     // Check whether the selected location is not already occupied (Check Parking Spot Availability)
     const spotCheck = await pool
       .request()
-      .input("location", sql.Char(3), location)
+      .input("location", sql.Char(4), location)
       .query("SELECT plate_number FROM Vehicle WHERE location = @location");
     if (spotCheck.recordset.length > 0) {
       return res.status(409).json({ error: "This location is full for now" });
     }
 
-    // Insert Vehicle Entry
+    // Insert Vehicle in database
     await pool
       .request()
       .input("plate_number", sql.Char(9), plate_number)
       .input("brand", sql.VarChar(30), brand || null)
-      .input("location", sql.Char(3), location)
+      .input("location", sql.Char(4), location)
       .query(`
         INSERT INTO Vehicle (plate_number, entrance_time, brand, location)
         VALUES (@plate_number, GETDATE(), @brand, @location)
       `);
 
-    res.status(201).json({ message: "Vehicle entry has been successfully recorded" });
+    res.status(201).json({success:true, message: "Vehicle entry has been successfully recorded" });
   } catch (err) {
     handleDbError(res, err);
   }
 });
+
+
 
 // Get Vehicle information before exit confirmation (VehicleExit.tsx)
 app.get("/api/vehicle/:plate_number", async (req, res) => {

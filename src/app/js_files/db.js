@@ -3,7 +3,7 @@ const sql = require("mssql");
 const config = {
   user: "parking_user",
   password: "12345",
-  server: ".",
+  server: "localhost",
   database: "ParkingDB",
   options: {
     encrypt: false,
