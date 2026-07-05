@@ -13,6 +13,7 @@ import { getUsers } from "./UserManagement_page"; // Make sure this path correct
 // Type definition for safe UI rendering
 interface User {
   id: string | number;
+  username: string;
   name: string;
   email: string;
   role: string;
@@ -26,7 +27,7 @@ export function UserManagement() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [newUser, setNewUser] = useState({ name: "", email: "", role: "Operator" });
+  const [newUser, setNewUser] = useState({ username: "", name: "", email: "", password: "", role: "Operator" });
 
   // Hook to pull data on component lifecycle mount
   useEffect(() => {
@@ -37,7 +38,8 @@ export function UserManagement() {
         
         // Transform incoming DB model (username, full_name) to UI model (id, name)
         const mappedUsers: User[] = data.map((dbUser: any) => ({
-          id: dbUser.username, 
+          id: dbUser.username,
+          username: dbUser.username,
           name: dbUser.full_name || "Unknown User",
           email: dbUser.email,
           role: dbUser.role
@@ -70,16 +72,22 @@ export function UserManagement() {
   };
 
   const handleAdd = () => {
-    if (!newUser.name || !newUser.email) {
+    if (!newUser.username || !newUser.name || !newUser.email || !newUser.password) {
       toast.error("Please fill in all required fields");
       return;
     }
     // Using simple unique fallback generation for UI key optimization
-    const newId = newUser.email.split('@')[0];
-    setUsers([...users, { id: newId, name: newUser.name, email: newUser.email, role: newUser.role }]);
+    const newId = newUser.username;
+    setUsers([...users, { 
+      id: newId, 
+      username: newUser.username,
+      name: newUser.name, 
+      email: newUser.email, 
+      role: newUser.role 
+    }]);
     toast.success("User added successfully");
     setAddDialogOpen(false);
-    setNewUser({ name: "", email: "", role: "Operator" });
+    setNewUser({ username: "", name: "", email: "", password: "", role: "Operator" });
   };
 
   const handleDelete = (userId: string | number) => {
@@ -125,6 +133,15 @@ export function UserManagement() {
               </DialogHeader>
               <div className="space-y-4 mt-4">
                 <div className="space-y-2">
+                  <Label htmlFor="new-username">Username</Label>
+                  <Input
+                    id="new-username"
+                    placeholder="Enter username"
+                    value={newUser.username}
+                    onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="new-name">Full Name</Label>
                   <Input
                     id="new-name"
@@ -141,6 +158,16 @@ export function UserManagement() {
                     placeholder="user@parking.com"
                     value={newUser.email}
                     onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new-password">Password</Label>
+                  <Input
+                    id="new-password"
+                    type="password"
+                    placeholder="Enter password"
+                    value={newUser.password}
+                    onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
@@ -184,6 +211,7 @@ export function UserManagement() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead>Username</TableHead>
                       <TableHead>Name</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Role</TableHead>
@@ -193,7 +221,8 @@ export function UserManagement() {
                   <TableBody>
                     {users.map((user) => (
                       <TableRow key={user.id}>
-                        <TableCell className="font-medium">{user.name}</TableCell>
+                        <TableCell className="font-medium">{user.username}</TableCell>
+                        <TableCell>{user.name}</TableCell>
                         <TableCell className="text-gray-600">{user.email}</TableCell>
                         <TableCell>
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(user.role)}`}>
@@ -300,6 +329,14 @@ export function UserManagement() {
           {editingUser && (
             <div className="space-y-4 mt-4">
               <div className="space-y-2">
+                <Label htmlFor="edit-username">Username</Label>
+                <Input
+                  id="edit-username"
+                  value={editingUser.username}
+                  onChange={(e) => setEditingUser({ ...editingUser, username: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="edit-name">Full Name</Label>
                 <Input
                   id="edit-name"
@@ -315,6 +352,16 @@ export function UserManagement() {
                   value={editingUser.email}
                   onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
                 />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-password">New Password (optional)</Label>
+                <Input
+                  id="edit-password"
+                  type="password"
+                  placeholder="Enter new password to change"
+                  onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value })}
+                />
+                <p className="text-xs text-gray-500">Leave blank to keep current password</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-role">Role</Label>

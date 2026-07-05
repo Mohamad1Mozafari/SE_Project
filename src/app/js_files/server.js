@@ -118,7 +118,7 @@ app.post("/api/user_management/delete_user", async (req, res) => {
 // 3. EDIT USER
 app.post("/api/user_management/edit_user", async (req, res) => {
   try {
-    const { old_username, new_username, name, role } = req.body;
+    const { old_username, new_username, name, role  , password} = req.body;
     
     if (!old_username || !new_username) {
       return res.status(400).json({ error: "User identifiers missing" });
@@ -134,9 +134,10 @@ app.post("/api/user_management/edit_user", async (req, res) => {
         .input("old_username", sql.VarChar(20), old_username)
         .input("new_username", sql.VarChar(20), new_username)
         .input("name", sql.VarChar(50), name)
+        .input("password", sql.VarChar(50), name)
         .query(`
           UPDATE Account 
-          SET username = @new_username, full_name = @name 
+          SET username = @new_username, full_name = @name  , password = @password
           WHERE username = @old_username
         `);
 
@@ -154,7 +155,7 @@ app.post("/api/user_management/edit_user", async (req, res) => {
           .query(`INSERT INTO Admin (username) VALUES (@username)`);
       } else if (cleanedRole === 'operator') {
         await transaction.request().input("username", sql.VarChar(20), new_username)
-          .query(`INSERT INTO Operator (username, join_date) VALUES (@username, GETDATE())`);
+          .query(`INSERT INTO Operator (username) VALUES (@username)`);
       } else if (cleanedRole === 'owner') {
         await transaction.request().input("username", sql.VarChar(20), new_username)
           .query(`INSERT INTO Owner (username) VALUES (@username)`);
@@ -174,7 +175,7 @@ app.post("/api/user_management/edit_user", async (req, res) => {
 // 4. ADD USER
 app.post("/api/user_management/add_user", async (req, res) => {
   try {
-    const { username, new_name, new_role } = req.body;
+    const { username, new_name, new_role , password } = req.body;
     
     if (!username) return res.status(400).json({ error: "Username required" });
 
@@ -186,7 +187,7 @@ app.post("/api/user_management/add_user", async (req, res) => {
       // 1. Create Base Account (Generating a default password placeholder)
       await transaction.request()
         .input("username", sql.VarChar(20), username)
-        .input("password", sql.NVarChar(255), "TemporaryPassword123!") 
+        .input("password", sql.NVarChar(255), password) 
         .input("name", sql.VarChar(50), new_name)
         .query(`
           INSERT INTO Account (username, password, full_name) 
@@ -217,33 +218,7 @@ app.post("/api/user_management/add_user", async (req, res) => {
   }
 });
 
-// 5. LAST LOGIN TIME
-app.post("/api/user_management/last_login_time", async (req, res) => {
-  try {
-    const { username } = req.body;
-    if (!username) return res.status(400).json({ error: "Username required" });
 
-    const pool = await poolPromise;
-    
-    // Finds recent login tracking records inside the TrafficLog event table
-    const result = await pool.request()
-      .input("username", sql.VarChar(20), username)
-      .query(`
-        SELECT TOP 1 event_time AS time 
-        FROM TrafficLog 
-        WHERE username = @username AND action_description LIKE '%login%'
-        ORDER BY event_time DESC
-      `);
-
-    if (result.recordset.length === 0) {
-      return res.json({ time: "Never" });
-    }
-
-    res.json({ time: result.recordset[0].time }); 
-  } catch (err) {
-    handleDbError(res, err);
-  }
-});
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

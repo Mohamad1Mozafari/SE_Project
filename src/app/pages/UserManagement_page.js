@@ -18,6 +18,8 @@ export async function getUsers() {
   const usersData = await response.json();
   return usersData; 
 }
+
+
 // ... rest of your deleteUser, editUser, addUser functions stay exactly the same
 export async function deleteUser(username) {
   try {
@@ -40,7 +42,8 @@ export async function editUser(oldUser, newUser) {
     oldUser.name === newUser.name &&
     oldUser.role === newUser.role &&
     oldUser.email === newUser.email &&
-    oldUser.status === newUser.status
+    oldUser.status === newUser.status && 
+    oldUser.password === newUser.password
   ) {
     return { success: false, message: "nothing changed" };
   }
@@ -55,7 +58,7 @@ export async function editUser(oldUser, newUser) {
         name: newUser.name,
         role: newUser.role,
         email: newUser.email,
-        status: newUser.status
+        password : newUser.password
       })
     });
     const check = await response.json();
@@ -75,11 +78,11 @@ export async function addUser(newUser) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        username: newUser.username, // Required to accurately store and fetch records later
+        username: newUser.username, 
         new_name: newUser.name,
         new_role: newUser.role,
         email: newUser.email,
-        status: newUser.status
+        password : newUser.password
       })
     });
     const check = await response.json();
@@ -93,17 +96,3 @@ export async function addUser(newUser) {
   }
 }
 
-async function lastLoginTime(username) {
-  if (!username) return "Never";
-  try {
-    const response = await fetch("http://localhost:3000/api/user_management/last_login_time", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username })
-    });
-    const getResultLogin = await response.json();
-    return getResultLogin["time"];
-  } catch (error) {
-    return "Error fetching time";
-  }
-}
