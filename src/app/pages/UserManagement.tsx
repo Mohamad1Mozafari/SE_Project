@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ArrowRight, UserPlus, Edit, Trash2, Shield, UserCog } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -10,49 +10,91 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Badge } from "../components/ui/badge";
 import { toast } from "sonner";
 
-export function UserManagement() {
-  const [users, setUsers] = useState([
-    { id: 1, name: "Admin User", email: "admin@parking.com", role: "Admin", status: "Active", lastLogin: "2 hours ago" },
-    { id: 2, name: "John Operator", email: "john@parking.com", role: "Operator", status: "Active", lastLogin: "1 day ago" },
-    { id: 3, name: "Sarah Manager", email: "sarah@parking.com", role: "Manager", status: "Active", lastLogin: "3 hours ago" },
-    { id: 4, name: "Mike Smith", email: "mike@parking.com", role: "Operator", status: "Active", lastLogin: "5 hours ago" },
-    { id: 5, name: "Lisa Brown", email: "lisa@parking.com", role: "Operator", status: "Inactive", lastLogin: "1 week ago" },
-  ]);
+// Import your API methods (Adjust the relative path to match your project directory)
+import { getUsers, addUser, editUser, deleteUser } from "./UserManagement_page";
 
+// Define an interface matching your real backend user data structure
+interface User {
+  username: string; // Used as the primary key for queries
+  name: string;
+  email: string;
+  role: string;
+  status: string;
+  lastLogin: string;
+}
+
+export function UserManagement() {
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<any>(null);
-  const [newUser, setNewUser] = useState({ name: "", email: "", role: "Operator", status: "Active" });
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [originalUser, setOriginalUser] = useState<User | null>(null); // Keep track of pre-edit values
+  const [newUser, setNewUser] = useState({ username: "", name: "", email: "", role: "Operator", status: "Active" });
 
-  const handleEdit = (user: any) => {
+  // Fetch users on component mount
+  useEffect(() => {
+    fetchUsersList();
+  }, []);
+
+  const fetchUsersList = async () => {
+    try {
+      setLoading(true);
+      const data = await getUsers();
+      setUsers(data);
+    } catch (error) {
+      toast.error("Failed to load users from system");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEdit = (user: User) => {
+    setOriginalUser({ ...user });
     setEditingUser({ ...user });
     setEditDialogOpen(true);
   };
 
-  const handleSaveEdit = () => {
-    if (editingUser) {
-      setUsers(users.map(u => u.id === editingUser.id ? editingUser : u));
+  const handleSaveEdit = async () => {
+    if (!editingUser || !originalUser) return;
+
+    const res = await editUser(originalUser, editingUser);
+    if (res.success) {
       toast.success("User updated successfully");
       setEditDialogOpen(false);
       setEditingUser(null);
+      setOriginalUser(null);
+      fetchUsersList(); // Refresh data from backend to ensure alignment
+    } else {
+      toast.error(res.message || "Could not update user");
     }
   };
 
-  const handleAdd = () => {
-    if (!newUser.name || !newUser.email) {
-      toast.error("Please fill in all required fields");
+  const handleAdd = async () => {
+    if (!newUser.username || !newUser.name || !newUser.email) {
+      toast.error("Please fill in all required fields (including Username)");
       return;
     }
-    const newId = Math.max(...users.map(u => u.id)) + 1;
-    setUsers([...users, { ...newUser, id: newId, lastLogin: "Never" }]);
-    toast.success("User added successfully");
-    setAddDialogOpen(false);
-    setNewUser({ name: "", email: "", role: "Operator", status: "Active" });
+
+    const res = await addUser(newUser);
+    if (res.success) {
+      toast.success("User added successfully");
+      setAddDialogOpen(false);
+      setNewUser({ username: "", name: "", email: "", role: "Operator", status: "Active" });
+      fetchUsersList(); // Refresh list
+    } else {
+      toast.error(res.message || "Could not add user");
+    }
   };
 
-  const handleDelete = (userId: number) => {
-    setUsers(users.filter(u => u.id !== userId));
-    toast.success("User deleted successfully");
+  const handleDelete = async (username: string) => {
+    const success = await deleteUser(username);
+    if (success) {
+      toast.success("User deleted successfully");
+      fetchUsersList(); // Refresh list
+    } else {
+      toast.error("Failed to delete user");
+    }
   };
 
   const getRoleBadgeColor = (role: string) => {
@@ -92,6 +134,15 @@ export function UserManagement() {
                 <DialogDescription>Create a new user account</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 mt-4">
+                <div className="space-y-2">
+                  <Label htmlFor="new-username">Username</Label>
+                  <Input
+                    id="new-username"
+                    placeholder="e.g., john_doe"
+                    value={newUser.username}
+                    onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
+                  />
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="new-name">Full Name</Label>
                   <Input
@@ -155,55 +206,64 @@ export function UserManagement() {
               <CardDescription>All registered users and their roles</CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Last Login</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {users.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell className="font-medium">{user.name}</TableCell>
-                      <TableCell className="text-gray-600">{user.email}</TableCell>
-                      <TableCell>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(user.role)}`}>
-                          {user.role}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={user.status === "Active" ? "default" : "secondary"}>
-                          {user.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-gray-500">{user.lastLogin}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex gap-2 justify-end">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEdit(user)}
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(user.id)}
-                          >
-                            <Trash2 className="w-4 h-4 text-red-600" />
-                          </Button>
-                        </div>
-                      </TableCell>
+              {loading ? (
+                <div className="text-center py-6 text-gray-500">Loading user records...</div>
+              ) : users.length === 0 ? (
+                <div className="text-center py-6 text-gray-500">No users found.</div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Last Login</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {users.map((user) => (
+                      <TableRow key={user.username}>
+                        <TableCell className="font-medium">
+                          <div>{user.name}</div>
+                          <div className="text-xs text-gray-400 font-normal">@{user.username}</div>
+                        </TableCell>
+                        <TableCell className="text-gray-600">{user.email}</TableCell>
+                        <TableCell>
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(user.role)}`}>
+                            {user.role}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={user.status === "Active" ? "default" : "secondary"}>
+                            {user.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-gray-500">{user.lastLogin}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex gap-2 justify-end">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEdit(user)}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDelete(user.username)}
+                            >
+                              <Trash2 className="w-4 h-4 text-red-600" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </div>

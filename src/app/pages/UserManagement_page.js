@@ -1,115 +1,121 @@
-//get the user table records and send in here and when one of them are selected by the name or other thign you choose and edit thigs of that and send for the update 
-export default function UserManagement (){
-       let response = await fetch("http://localhost:3000/VehicleExit",{method:"GET"});
-        let get_users = await response.json();
-        let name , email  , role  , Status , Last_Login_Time , id ;
-        name= get_users["name"];
-        email= get_users["email"];
-        role= get_users["role"];
-        Status= get_users["Status"];
-        id= get_users["id"];
-        Last_Login_Time = last_login(id); 
-        return name , email  , role  , Status , Last_Login_Time , id ;
-}
+// UserManagement_page.js
 
-function delete_user(){
-let response = await fetch("http://localhost:3000/edit_user",
-    {
-
-        method:"POST",
-
-        headers:{
-            "Content-Type":"application/json"
-        },
-
-        body: JSON.stringify({
-
-            "name":name,
-            "role":role ,
-            "email":email,
-            "status":status 
-
-        })
+export async function getUsers() {
+  try {
+    const response = await fetch("http://localhost:3000/api/user_management/get_all_userInfo", { 
+      method: "GET" 
     });
-    let check = await response.json();
-    if (check=="success"){
+    const usersData = await response.json();
+    
+    const usersArray = Array.isArray(usersData) ? usersData : [usersData];
 
-    }else{
-        
-    }
+    // Fetch last login for each user in parallel
+    const usersWithLogin = await Promise.all(
+      usersArray.map(async (user) => {
+        const lastLogin = await lastLoginTime(user.username);
+        return {
+          username: user.username, // Added to provide a reliable key identifier in React components
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          status: user.Status || user.status, 
+          lastLogin: lastLogin || "Never"
+        };
+      })
+    );
+
+    return usersWithLogin;
+  } catch (error) {
+    console.error("Failed to fetch users:", error);
+    throw error;
+  }
 }
-function check_anithing_changed (old_name , old_role , new_role , new_name , new_email , new_status , old_email , old_status){
-if ( old_role == new_role && old_name==new_name && new_email == old_email && new_status == old_status){
-    return 0 ; 
-}
-return 1 ;
-}
-function edit_user(old_name , old_role , new_role , new_name , new_email , new_status , old_email , old_status){
-// if one of them changed go use the post mehtod 
-if (check_anithing_changed(old_name , old_role , new_role , new_name , new_email , new_status , old_email , old_status)){
-    let massage = "nothing changed"
-}
-return massage ; 
-let response = await fetch("http://localhost:3000/edit_user",
-    {
 
-        method:"POST",
-
-        headers:{
-            "Content-Type":"application/json"
-        },
-
-        body: JSON.stringify({
-
-            "name_old":name_old,
-            "role_old":role_old ,
-            "new_name":new_name ,
-            "new_role":new_role,
-            "email":email,
-            "status":status 
-
-        })
+export async function deleteUser(username) {
+  try {
+    const response = await fetch("http://localhost:3000/api/user_management/delete_user", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username })
     });
-    let check = await response.json();
-    if (check=="success"){
-
-    }else {
-        return "error can not edit user";
-    }
-
+    const result = await response.json();
+    return result === "success";
+  } catch (error) {
+    console.error("Delete user error:", error);
+    return false;
+  }
 }
 
+export async function editUser(oldUser, newUser) {
+  if (
+    oldUser.username === newUser.username &&
+    oldUser.name === newUser.name &&
+    oldUser.role === newUser.role &&
+    oldUser.email === newUser.email &&
+    oldUser.status === newUser.status
+  ) {
+    return { success: false, message: "nothing changed" };
+  }
 
-function add_user (){
-    let response = await fetch("http://localhost:3000/add_user",
-    {
-
-        method:"POST",
-
-        headers:{
-            "Content-Type":"application/json"
-        },
-
-        body: JSON.stringify({
-
-            "name_old":name_old,
-            "role_old":role_old ,
-            "new_name":new_name ,
-            "new_role":new_role,
-            "email":email,
-            "status":status 
-
-        })
+  try {
+    const response = await fetch("http://localhost:3000/api/user_management/edit_user", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        new_username: newUser.username, // Include username identifier context for updates
+        old_username: oldUser.username,
+        name: newUser.name,
+        role: newUser.role,
+        email: newUser.email,
+        status: newUser.status
+      })
     });
-        let check = await response.json();
-    if (check=="success"){
-
-    }else {
-        return "error can not edit user";
+    const check = await response.json();
+    if (check === "success") {
+      return { success: true };
+    } else {
+      return { success: false, message: "error can not edit user" };
     }
+  } catch (error) {
+    return { success: false, message: "Network error" };
+  }
 }
-function last_login(id){
-let response = await fetch("http://localhost:3000/add_user",{method:"POST"});
-let get_rsult_login = await response.json();
-return get_rsult_login["time"] ;
+
+export async function addUser(newUser) {
+  try {
+    const response = await fetch("http://localhost:3000/api/user_management/add_user", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: newUser.username, // Required to accurately store and fetch records later
+        new_name: newUser.name,
+        new_role: newUser.role,
+        email: newUser.email,
+        status: newUser.status
+      })
+    });
+    const check = await response.json();
+    if (check === "success") {
+      return { success: true };
+    } else {
+      return { success: false, message: "error can not add user" };
+    }
+  } catch (error) {
+    return { success: false, message: "Network error" };
+  }
+}
+
+async function lastLoginTime(username) {
+  if (!username) return "Never";
+  try {
+    const response = await fetch("http://localhost:3000/api/user_management/last_login_time", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username })
+    });
+    const getResultLogin = await response.json();
+    return getResultLogin["time"];
+  } catch (error) {
+    return "Error fetching time";
+  }
 }

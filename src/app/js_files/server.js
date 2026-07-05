@@ -55,6 +55,145 @@ app.post("/api/login", async (req, res) => {
   }
 });
 
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+app.post("/api/user_management/get_all_userInfo", async (req, res) => {
+  // console.log ("check2");
+
+  try {
+    const pool = await poolPromise;
+    
+    // FIX: Maintained proper chain syntax and utilized safe parameterization
+    const result = await pool
+      .request()
+      .input("username", sql.VarChar(20), username)
+      .input("password", sql.NVarChar(255), password) 
+      .query(`
+        SELECT 
+ 
+      `);
+
+    if (result.recordset.length === 0) {
+      return res.status(401).json({ error: "Username or Password is wrong" });
+    }
+
+    // Sends back { username, fullName, role }
+    res.json(result.recordset[0]); 
+  } catch (err) {
+    handleDbError(res, err);
+  }
+});
+
+app.get("/api/user_management/delete_user", async (req, res) => {
+  // console.log ("check2");
+
+  try {
+    const pool = await poolPromise;
+    const username ; // must get from the API it is get block 
+    // FIX: Maintained proper chain syntax and utilized safe parameterization
+    const result = await pool
+      .request()
+      .input("username", sql.VarChar(20), username)
+      .input("password", sql.NVarChar(255), password) 
+      .query(`
+        DELETE FROM  WHERE username = {username};
+ 
+      `);
+
+    if (result.recordset.length === 0) {
+      return res.status(401).json({ error: "Username or Password is wrong" });
+    }
+
+    // Sends back { username, fullName, role }
+    res.json(result.recordset[0]); 
+  } catch (err) {
+    handleDbError(res, err);
+  }
+});
+
+app.get("/api/user_management/edit_user", async (req, res) => {
+  // console.log ("check2");
+
+  try {
+    const pool = await poolPromise;
+    const new_username, old_username , name , role   ,email ,status ;    
+    const result = await pool
+      .request()
+  
+      .query(`
+        update useranme , name , role , email ,status  from where username = old_username  set
+        useranme = {new_username} , name =  {new_name}, role = {new_role} , email = {email},status = {status} 
+ 
+      `);
+
+    if (result.recordset.length === 0) {
+      return res.status(401).json({ error: "Username or Password is wrong" });
+    }   
+
+    // Sends back { username, fullName, role }
+    res.json(result.recordset[0]); 
+  } catch (err) {
+    handleDbError(res, err);
+  }
+});
+
+
+
+app.get("/api/user_management/add_user", async (req, res) => {
+  // console.log ("check2");
+
+  try {
+    const pool = await poolPromise;
+    const username , name , role   ,email ,status ;    
+    const result = await pool
+      .request()
+  
+      .query(`
+        inserts into 
+        values (username , name , role   ,email ,status)
+ 
+      `);
+
+    if (result.recordset.length === 0) {
+      return res.status(401).json({ error: "Username or Password is wrong" });
+    }   
+
+    // Sends back { username, fullName, role }
+    res.json(result.recordset[0]); 
+  } catch (err) {
+    handleDbError(res, err);
+  }
+});
+
+
+app.get("/api/user_management/last_login_time", async (req, res) => {
+  // console.log ("check2");
+
+  try {
+    const pool = await poolPromise;
+    const username ;    
+    const result = await pool
+      .request()
+  
+      .query(`
+       select where username {username}
+ 
+      `);
+
+    if (result.recordset.length === 0) {
+      return res.status(401).json({ error: "Username or Password is wrong" });
+    }   
+
+    // Sends back { username, fullName, role }
+    res.json(result.recordset[0]); 
+  } catch (err) {
+    handleDbError(res, err);
+  }
+});
+
+
+
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
