@@ -5,12 +5,14 @@ USE PublicParkingSystem;
 GO
 
 -- =========================
--- 1. ACCOUNT
--- =========================
+
+new change for the account 
 CREATE TABLE Account (
     username VARCHAR(20) NOT NULL,
     password NVARCHAR(255) NOT NULL,
     full_name VARCHAR(50),
+    email NVARCHAR(50) , 
+    status NVARCHAR(25) check ('active' , 'Inactive'), 
     PRIMARY KEY (username)
 );
 

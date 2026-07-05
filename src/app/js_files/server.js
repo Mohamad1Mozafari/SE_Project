@@ -66,22 +66,22 @@ import sql from 'mssql'; // or const sql = require('mssql');
 const VALID_ROLES = ['admin', 'operator', 'owner'];
 
 // 1. GET ALL USERS
-app.get("/api/user_management/get_all_userInfo", async (req, res) => {
+app.post("/api/user_management/get_all_userInfo", async (req, res) => {
   try {
     const pool = await poolPromise;
     
-    // Aggregates accounts and figures out their roles based on sub-table joins
+    // Explicitly joining Account with Admin, Operator, and Owner sub-tables
     const result = await pool.request().query(`
       SELECT 
         a.username,
-        a.full_name AS name,
-        'user@example.com' AS email, -- Fallback since email is missing in schema
-        'Active' AS status,          -- Fallback since status is missing in schema
+        a.full_name,
+        a.email,
+        a.status,
         CASE 
-          WHEN adm.username IS NOT NULL THEN 'admin'
-          WHEN op.username IS NOT NULL THEN 'operator'
-          WHEN ow.username IS NOT NULL THEN 'owner'
-          ELSE 'user'
+          WHEN adm.username IS NOT NULL THEN 'Admin'
+          WHEN op.username IS NOT NULL THEN 'Operator'
+          WHEN ow.username IS NOT NULL THEN 'Manager' -- Maps 'Owner' table to 'Manager' UI role
+          ELSE 'Operator'                             -- Fallback role if not found in any
         END AS role
       FROM Account a
       LEFT JOIN Admin adm ON a.username = adm.username
