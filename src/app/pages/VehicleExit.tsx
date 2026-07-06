@@ -1,53 +1,81 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ArrowRight, Search, CheckCircle, DollarSign } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { toast } from "sonner";
+import vehicle_exit_handler, { get_vehicle_info, get_current_pricing } from "./VehicleExitHandler";
 
 export function VehicleExit() {
   const [searchPlate, setSearchPlate] = useState("");
   const [vehicleFound, setVehicleFound] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isProcessingExit, setIsProcessingExit] = useState(false);
+  const [pricing, setPricing] = useState({ entranceFee: 0, hourlyFee: 0 });
   const [vehicleData, setVehicleData] = useState({
     plateNumber: "",
+    location: "",
     entryTime: "",
-    exitTime: "",
-    parkingSpot: "",
-    duration: "",
-    calculatedFee: 0,
+    estimatedExitTime: "",
+    durationHours: 0,
+    estimatedFee: 0,
   });
 
-  const handleSearch = () => {
+  useEffect(() => {
+    const loadPricing = async () => {
+      const result = await get_current_pricing();
+      if (result) {
+        setPricing({
+          entranceFee: Number(result.entrance_fee) || 0,
+          hourlyFee: Number(result.hourly_fee) || 0,
+        });
+      }
+    };
+    loadPricing();
+  }, []);
+
+  const handleSearch = async () => {
     if (!searchPlate) {
       toast.error("Please enter a plate number");
       return;
     }
 
-    // Mock search - in real app would query database
-    const entryDate = new Date();
-    entryDate.setHours(entryDate.getHours() - 3);
-    const exitDate = new Date();
-    
-    const durationHours = 3;
-    const hourlyRate = 5;
-    const calculatedFee = durationHours * hourlyRate;
+    setIsSearching(true);
+    const result = await get_vehicle_info(searchPlate);
+    setIsSearching(false);
+
+    if (!result) {
+      toast.error("Vehicle not found in the parking facility");
+      setVehicleFound(false);
+      return;
+    }
 
     setVehicleData({
-      plateNumber: searchPlate,
-      entryTime: entryDate.toLocaleString(),
-      exitTime: exitDate.toLocaleString(),
-      parkingSpot: "A-15",
-      duration: `${durationHours} hours`,
-      calculatedFee: calculatedFee,
+      plateNumber: result.plate_number,
+      location: result.location,
+      entryTime: new Date(result.entrance_time).toLocaleString(),
+      estimatedExitTime: new Date(result.estimated_exit_time).toLocaleString(),
+      durationHours: result.estimated_duration_hours,
+      estimatedFee: Number(result.estimated_fee),
     });
     setVehicleFound(true);
   };
 
-  const handleConfirmExit = () => {
-    toast.success(`Vehicle ${vehicleData.plateNumber} exit confirmed. Fee: $${vehicleData.calculatedFee}`);
-    setSearchPlate("");
-    setVehicleFound(false);
+  const handleConfirmExit = async () => {
+    setIsProcessingExit(true);
+    const result = await vehicle_exit_handler(vehicleData.plateNumber);
+    setIsProcessingExit(false);
+
+    if (result) {
+      toast.success(
+        `Vehicle ${vehicleData.plateNumber} exit confirmed. Fee: $${Number(result.TotalCost).toFixed(2)}`
+      );
+      setSearchPlate("");
+      setVehicleFound(false);
+    } else {
+      toast.error("Failed to process vehicle exit. Please try again.");
+    }
   };
 
   return (
@@ -76,15 +104,17 @@ export function VehicleExit() {
               <div className="flex gap-3">
                 <div className="flex-1">
                   <Input
-                    placeholder="Enter plate number (e.g., ABC-1234)"
+                    placeholder="e.g., 12B345-51"
                     value={searchPlate}
+                    maxLength={11}
                     onChange={(e) => setSearchPlate(e.target.value.toUpperCase())}
                     onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                    disabled={isSearching}
                   />
                 </div>
-                <Button onClick={handleSearch}>
+                <Button onClick={handleSearch} disabled={isSearching}>
                   <Search className="w-4 h-4 mr-2" />
-                  Search
+                  {isSearching ? "Searching..." : "Search"}
                 </Button>
               </div>
             </CardContent>
@@ -109,7 +139,7 @@ export function VehicleExit() {
                     <div className="space-y-2">
                       <Label>Parking Spot</Label>
                       <div className="p-3 bg-gray-50 rounded-lg font-medium">
-                        {vehicleData.parkingSpot}
+                        {vehicleData.location}
                       </div>
                     </div>
 
@@ -121,23 +151,23 @@ export function VehicleExit() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Exit Time</Label>
+                      <Label>Exit Time (estimated)</Label>
                       <div className="p-3 bg-gray-50 rounded-lg">
-                        {vehicleData.exitTime}
+                        {vehicleData.estimatedExitTime}
                       </div>
                     </div>
 
                     <div className="space-y-2">
                       <Label>Parking Duration</Label>
                       <div className="p-3 bg-blue-50 rounded-lg font-medium text-blue-700">
-                        {vehicleData.duration}
+                        {vehicleData.durationHours} hours
                       </div>
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Calculated Fee</Label>
+                      <Label>Estimated Fee</Label>
                       <div className="p-3 bg-green-50 rounded-lg font-bold text-green-700 text-xl">
-                        ${vehicleData.calculatedFee.toFixed(2)}
+                        ${vehicleData.estimatedFee.toFixed(2)}
                       </div>
                     </div>
                   </div>
@@ -153,19 +183,21 @@ export function VehicleExit() {
                 </CardHeader>
                 <CardContent>
                   <div className="flex gap-3">
-                    <Button 
+                    <Button
                       onClick={handleConfirmExit}
                       className="flex-1 bg-green-600 hover:bg-green-700"
+                      disabled={isProcessingExit}
                     >
                       <CheckCircle className="w-4 h-4 mr-2" />
-                      Confirm Exit & Process Payment
+                      {isProcessingExit ? "Processing..." : "Confirm Exit & Process Payment"}
                     </Button>
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       onClick={() => {
                         setVehicleFound(false);
                         setSearchPlate("");
                       }}
+                      disabled={isProcessingExit}
                     >
                       Cancel
                     </Button>
@@ -224,16 +256,12 @@ export function VehicleExit() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">Entrance Fee</span>
+                <span className="font-semibold">${pricing.entranceFee.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">Hourly Rate</span>
-                <span className="font-semibold">$5.00</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Daily Max</span>
-                <span className="font-semibold">$40.00</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Grace Period</span>
-                <span className="font-semibold">15 mins</span>
+                <span className="font-semibold">${pricing.hourlyFee.toFixed(2)}</span>
               </div>
             </CardContent>
           </Card>
