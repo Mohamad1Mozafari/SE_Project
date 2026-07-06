@@ -23,6 +23,12 @@ export function TariffManagement() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingTariff, setEditingTariff] = useState<any>(null);
 
+  const entranceFee =
+    tariffs.find(t => t.type === "Entrance fee");
+
+  const hourlyTariff =
+    tariffs.find(t => t.type === "Hourly");
+
   useEffect(() => {
     async function load() {
         const loadedTariffs =
@@ -125,11 +131,15 @@ export function TariffManagement() {
             <CardContent className="space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">Entrance fee</span>
-                <span className="font-semibold">80.00 TMN</span>
+                <span className="font-semibold">
+                  {entranceFee?.rate.toFixed(2)} TMN
+                </span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">Hourly</span>
-                <span className="font-semibold">40.00 TMN</span>
+                <span className="font-semibold">
+                  {hourlyTariff?.rate.toFixed(2)} TMN
+                </span>
               </div>
             </CardContent>
           </Card>

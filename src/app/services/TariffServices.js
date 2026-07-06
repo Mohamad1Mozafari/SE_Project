@@ -31,7 +31,6 @@ async function loadTariffs() {
         await fetch("http://localhost:4000/api/getTariffs");
 
     tariffList = await response.json();
-    console.log(tariffList);
     tariffMap.clear();
     tariffList.forEach(tariff => {
         tariffMap.set(tariff.type, tariff);
