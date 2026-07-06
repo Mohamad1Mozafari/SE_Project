@@ -416,3 +416,81 @@ WITH PASSWORD = '123456';
 GO
 
 
+
+
+
+
+
+
+#####
+CREATE TABLE ShiftManagement (
+
+    shiftID INT IDENTITY(1,1) PRIMARY KEY,
+
+    operatorID VARCHAR(20),
+
+    shiftDate DATE,
+
+    startTime TIME,
+
+    endTime TIME,
+
+    status VARCHAR(20)
+
+);
+
+
+
+CREATE TABLE ShiftRequest (
+
+    requestID INT IDENTITY(1,1) PRIMARY KEY,
+
+    shiftID INT,
+
+    operatorID VARCHAR(20),
+
+    requestType VARCHAR(20),
+
+    reason VARCHAR(255),
+
+    status VARCHAR(20),
+
+    requestDate DATETIME DEFAULT GETDATE(),
+
+
+
+    FOREIGN KEY (shiftID) REFERENCES ShiftManagement(shiftID),
+
+    FOREIGN KEY (operatorID) REFERENCES Operator(username)
+
+);
+
+
+
+CREATE TABLE ShiftReview (
+
+    reviewID INT IDENTITY(1,1) PRIMARY KEY,
+
+    requestID INT,
+
+    ownerID VARCHAR(20),
+
+    decision VARCHAR(20),
+
+    feedback VARCHAR(255),
+
+    reviewDate DATETIME DEFAULT GETDATE(),
+
+
+
+    FOREIGN KEY (requestID) REFERENCES ShiftRequest(requestID),
+
+    FOREIGN KEY (ownerID) REFERENCES Owner(username)
+
+);
+
+
+check this what it have problem 
+1. it must add the decision approved reject and etc 
+2. for  status VARCHAR(20), must be seened , reject , approved 
+
