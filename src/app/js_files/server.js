@@ -182,7 +182,32 @@ app.post("/api/vehicle_entry", async (req, res) => {
 
 
 
-// Get Vehicle information before exit confirmation (VehicleExit.tsx)
+// * Vehicle Exit (VehicleExit.tsx) *
+
+// Get current cost policy to show in the sidebar(under '$ pricing' text)
+app.get("/api/vehicle_exit/pricing", async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request().query(`
+      SELECT TOP 1 entrance_fee, hourly_fee
+      FROM CostPolicy
+      ORDER BY costID DESC
+    `);
+
+    if (result.recordset.length === 0) {
+      return res.status(404).json({ error: "No pricing policy has been defined yet" });
+    }
+
+    res.json({
+      entrance_fee: result.recordset[0].entrance_fee,
+      hourly_fee: result.recordset[0].hourly_fee,
+    });
+  } catch (err) {
+    handleDbError(res, err);
+  }
+});
+
+// Get Vehicle information before exit confirmation
 app.get("/api/vehicle/:plate_number", async (req, res) => {
   const { plate_number } = req.params;
 
@@ -209,7 +234,7 @@ app.get("/api/vehicle/:plate_number", async (req, res) => {
     const entranceFee = costResult.recordset[0]?.entrance_fee ?? 0;
     const hourlyFee = costResult.recordset[0]?.hourly_fee ?? 0;
 
-    // Cost Preview for user
+    // fee preview for the operator (final cost will calculate by a stored procedure in the database at confirm time)
     const entranceTime = new Date(vehicle.entrance_time);
     const now = new Date();
     const durationMinutes = Math.round((now - entranceTime) / 60000);
@@ -230,14 +255,14 @@ app.get("/api/vehicle/:plate_number", async (req, res) => {
   }
 });
 
-// Confirm Vehicle Exit (VehicleExit.tsx)
-// Using Stored Procedure(RegisterVehicleExit) in SQL Server that i made before, to calculate the cost
+// Confirm Vehicle Exit
+// Uses the 'RegisterVehicleExit' stored procedure, to calculate the final cost and move the record from Vehicle to LogVehicle
 app.post("/api/vehicle-exit", async (req, res) => {
   const { plate_number } = req.body;
   if (!plate_number) {
     return res.status(400).json({ error: "Plate number is required" });
   }
-  // Execute "EXEC RegisterVehicleExit @plate_number = ....;"  in SQL Server
+
   try {
     const pool = await poolPromise;
     const result = await pool
@@ -250,6 +275,8 @@ app.post("/api/vehicle-exit", async (req, res) => {
     handleDbError(res, err);
   }
 });
+
+
 
 app.listen(PORT, () => {
   console.log(`Backend server is running on http://localhost:${PORT}`);

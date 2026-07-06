@@ -36,7 +36,7 @@ export function VehicleEntry() {
 
     const platePattern = /^\d{2}-[A-Z]-\d{3}-\d{2}$/;
     if (!platePattern.test(plateNumber)) {
-        toast.error("Plate number must be in format: 12-B-345-67");
+        toast.error("Plate number must be in format: 12-B-345-51");
         return;
     }
 
@@ -81,7 +81,7 @@ export function VehicleEntry() {
                     <Label htmlFor="plateNumber">Plate Number *</Label>
                     <Input
                       id="plateNumber"
-                      placeholder="e.g., 12B345-51"
+                      placeholder="e.g., 12-B-345-51"
                       value={plateNumber}
                       maxLength={11}
                       onChange={(e) => setPlateNumber(e.target.value.toUpperCase())}
@@ -145,7 +145,7 @@ export function VehicleEntry() {
                   <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-medium">1</div>
                   <div>
                     <p className="text-sm font-medium">Enter plate number</p>
-                    <p className="text-xs text-gray-600">Use format: 12B345-51</p>
+                    <p className="text-xs text-gray-600">Use format: 12-B-345-51</p>
                   </div>
                 </div>
                 <div className="flex gap-3">
