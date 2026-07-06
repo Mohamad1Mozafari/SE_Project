@@ -276,7 +276,47 @@ app.post("/api/vehicle-exit", async (req, res) => {
   }
 });
 
+app.get("/api/getTariffs", async (req, res) => {
+  try {
+    // ->AHMAD: connect this to database and optionally make it follow the ui style:
+    // {id, type, }
+    const tariffs = [
+      { id: 1, type: "Entrance fee", rate: 80.00, description: "First hour entrance" },
+      { id: 2, type: "Hourly", rate: 40.00, description: "Houtly fee after the first hour" },
+    ]
+    res.json(tariffs);
+  }
+  catch (err) {
+    console.log("caused err from getTariffs...");
+    handleDbError(res, err);
+  }
+});
 
+app.post("/api/updateTariff", async (req, res) => {
+  const { id, rate } = req.body;
+  if (id == null || rate == null) {
+    return res.status(400).json({
+      error: "id and rate are required"
+    });
+  }
+
+  try {
+    res.json({
+      success: true,
+      message: "Tariff updated."
+    });
+  }
+  catch (err) {
+    console.log("Caused err from updateTariff");
+    handleDbError(res, err);
+  }
+});
+
+/* FATAL: server.js crashes on every request. The output indicates:
+```
+can not connect to the Database! Failed to connect to .:1433 - getaddrinfo EAI_AGAIN .
+```
+*/
 
 app.listen(PORT, () => {
   console.log(`Backend server is running on http://localhost:${PORT}`);
