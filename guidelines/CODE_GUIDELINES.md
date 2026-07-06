@@ -46,13 +46,6 @@ Example in our codebase:
 
 A software system is comprised of many areas. Even though in this project each of us will work on all aspects, it has been decided that some of us also specialize in certain areas.
 
-**NOTE: THESE ARE ONLY THE SPECIALIZED ROLES. AS IS OBVIOUS FROM THE COMMITS, EVERY PERSON IS
-RESPONSIBLE FOR ALL ASPECTS AT THE END OF THE DAY**
-
-- Ahmad: DB
-- Omid: Backend
-- Mohammad: Backend + APIs
-
 **To direct other team member's attention to a piece of code, write a comment starting with -> then the person's name in uppercase.**
 Example:
 
