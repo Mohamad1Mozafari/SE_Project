@@ -70,5 +70,5 @@ This project is licensed under the [MIT License](LICENSE.md) - see the [LICENSE.
 ## to run 
 npm start
 npm run electron 
-cd \src\app\js_files
+cd src\app\js_files
 node server.js

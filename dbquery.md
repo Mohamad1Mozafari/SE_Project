@@ -11,8 +11,7 @@ CREATE TABLE Account (
     username VARCHAR(20) NOT NULL,
     password NVARCHAR(255) NOT NULL,
     full_name VARCHAR(50),
-    email NVARCHAR(50) , 
-    status NVARCHAR(25) check ('active' , 'Inactive'),--romove this one not needed  
+    email NVARCHAR(50) ,  
     PRIMARY KEY (username)
 );
 

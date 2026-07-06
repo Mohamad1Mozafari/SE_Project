@@ -1,7 +1,7 @@
 //server.js
-const cors = require("cors");
-const { sql, poolPromise } = require("./db");
-
+import { sql, poolPromise } from "./db.js";
+import express from 'express' ;
+import cors from "cors"; 
 const app = express();
 app.use(cors());
 app.use(express.json()); 
@@ -127,6 +127,7 @@ app.post("/api/user_management/delete_user", async (req, res) => {
 });
 
 // 3. EDIT USER (Fixed transaction error throwing and tracking)
+// 3. EDIT USER (Fixed parameter mismatch and role mapping variables)
 app.post("/api/user_management/edit_user", async (req, res) => {
   try {
     const { username, name, email, role, password } = req.body;
@@ -142,63 +143,72 @@ app.post("/api/user_management/edit_user", async (req, res) => {
     try {
       const request = new sql.Request(transaction);
 
-      // Bind basic parameters
       request.input("username", sql.VarChar(20), username);
       request.input("name", sql.VarChar(50), name);
       request.input("email", sql.NVarChar(50), email);
 
-      // 1. Update core Account information
+      // 1. Update core Account information and verify execution row counts
+      let updateResult;
       if (password && password.trim() !== "") {
         request.input("password", sql.NVarChar(255), password);
-        await request.query(`
+        updateResult = await request.query(`
           UPDATE Account 
           SET full_name = @name, email = @email, password = @password
           WHERE username = @username
         `);
       } else {
-        await request.query(`
+        updateResult = await request.query(`
           UPDATE Account 
           SET full_name = @name, email = @email
           WHERE username = @username
         `);
       }
 
-      // 2. Handle Role Changes safely
+      if (updateResult.rowsAffected[0] === 0) {
+        throw new Error("User account not found.");
+      }
+
+      // 2. Handle Role changes elegantly without erasing data unnecessarily
       if (role) {
         const cleanedRole = role.toLowerCase();
 
-        // Remove from all child tables first safely
-        await request.query(`
-          DELETE FROM Admin WHERE username = @username;
-          DELETE FROM Operator WHERE username = @username;
-          DELETE FROM Owner WHERE username = @username;
-        `);
-
-        // Re-insert into the single target role table
+        // Safe verification check: does this person already belong to this role sub-table?
+        let currentRoleMatch = false;
         if (cleanedRole === 'admin') {
-          await request.query(`INSERT INTO Admin (username) VALUES (@username)`);
+          const check = await request.query(`SELECT 1 FROM Admin WHERE username = @username`);
+          if (check.recordset.length > 0) currentRoleMatch = true;
         } else if (cleanedRole === 'operator') {
-          await request.query(`INSERT INTO Operator (username, join_date) VALUES (@username, GETDATE())`);
+          const check = await request.query(`SELECT 1 FROM Operator WHERE username = @username`);
+          if (check.recordset.length > 0) currentRoleMatch = true;
         } else if (cleanedRole === 'manager' || cleanedRole === 'owner') {
-          await request.query(`INSERT INTO Owner (username) VALUES (@username)`);
+          const check = await request.query(`SELECT 1 FROM Owner WHERE username = @username`);
+          if (check.recordset.length > 0) currentRoleMatch = true;
+        }
+
+        // Only swap sub-tables if the target destination role actually changed
+        if (!currentRoleMatch) {
+          await request.query(`
+            DELETE FROM Admin WHERE username = @username;
+            DELETE FROM Operator WHERE username = @username;
+            DELETE FROM Owner WHERE username = @username;
+          `);
+
+          if (cleanedRole === 'admin') {
+            await request.query(`INSERT INTO Admin (username) VALUES (@username)`);
+          } else if (cleanedRole === 'operator') {
+            await request.query(`INSERT INTO Operator (username, join_date) VALUES (@username, GETDATE())`);
+          } else if (cleanedRole === 'manager' || cleanedRole === 'owner') {
+            await request.query(`INSERT INTO Owner (username) VALUES (@username)`);
+          }
         }
       }
 
       await transaction.commit();
-      res.json("success");
+      return res.json({ success: true });
     } catch (txErr) {
-      // Safe rollback execution
-      try {
-        await transaction.rollback();
-      } catch (rollbackErr) {
-        console.error("Rollback failed:", rollbackErr.message);
-      }
-      
-      // Log the exact schema constraint issue to your backend terminal
+      await transaction.rollback();
       console.error("DUE TO DB SCHEMA RULE CONSTRAINT:", txErr.message);
-      
-      // Crucial Fix: Use handleDbError immediately instead of re-throwing
-      return handleDbError(res, txErr);
+      return res.status(400).json({ success: false, message: txErr.message });
     }
   } catch (err) {
     handleDbError(res, err);

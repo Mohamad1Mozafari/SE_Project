@@ -28,11 +28,14 @@ export async function deleteUser(username) {
 }
 
 export async function editUser(oldUser, newUser) {
+  const passwordChanged = newUser.password?.trim();
+  console.log ("$$$$$$$$$$$$$this is massage to see ")
+  // 1. Simplified and safe modification checker
   if (
     oldUser.name === newUser.name &&
     oldUser.role === newUser.role &&
     oldUser.email === newUser.email &&
-    (!newUser.password || newUser.password === "")// check this one 
+    !passwordChanged
   ) {
     return { success: false, message: "No data modifications detected." };
   }
@@ -42,19 +45,24 @@ export async function editUser(oldUser, newUser) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        // username: newUser.username, // Remains static identifier
         username: oldUser.username,
         name: newUser.name,
         email: newUser.email,
         role: newUser.role,
-        password: newUser.password || ""// if (newuser === '') -> ''_ false || ""
+        password: passwordChanged || ""
       })
     });
+
     const check = await response.json();
-    if (check === "success") {
+
+    // 2. Align parsing with the actual JSON structure returned by server
+    if (response.ok && check.success) {
       return { success: true };
     } else {
-      return { success: false, message: "Database rejected profile parameter updates." };
+      return { 
+        success: false, 
+        message: check.message || "Database rejected profile parameter updates." 
+      };
     }
   } catch (error) {
     return { success: false, message: "Network connection failure." };
