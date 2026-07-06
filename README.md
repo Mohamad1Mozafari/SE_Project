@@ -2,7 +2,7 @@
 
 The following project was assigned to students during the second semester of 404-405 at [UOK](https://uok.ac.ir/), group 1 instructed by [Dr. Sadegh Sulaimany](https://research.uok.ac.ir/~ssulaimany/).
 
-![Application banner](images/ui/app_banner.png)
+![Application banner](images/README/app_banner.png)
 
 The project focuses on collaboration, AGILE methodolgy, and key software engineering concepts.
 
@@ -90,7 +90,7 @@ You should see an output like:
 
 You can now access the project through your web browser by going to the URL displayed in the output. In this case: ```http://localhost:5173/```
 
-![Example of running the project in a web browser](images/ui/example_running_webbrowser.png)
+![Example of running the project in a web browser](images/README/example_running_webbrowser.png)
 
 If you prefer to run the project in application mode, then while **the localhost is up and running, in another terminal session,** run the command:
 

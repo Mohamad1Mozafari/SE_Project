@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ArrowRight, DollarSign, Edit, Save } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -7,28 +7,49 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../co
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { toast } from "sonner";
+import { getTariffs, updateTariffRate } from "../services/TariffServices";
+
+interface Tariff {
+    id: number;
+    type: string;
+    rate: number;
+    description: string;
+}
 
 export function TariffManagement() {
-  const [tariffs, setTariffs] = useState([
-    { id: 1, type: "Entrance fee", rate: 80.00, description: "First hour entrance" },
-    { id: 2, type: "Hourly", rate: 40.00, description: "Houtly fee after the first hour" },
-  ]);
 
+  const [tariffs, setTariffs] =
+    useState<Tariff[]>([]);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingTariff, setEditingTariff] = useState<any>(null);
+
+  useEffect(() => {
+    async function load() {
+        const loadedTariffs =
+            await getTariffs();
+        setTariffs(loadedTariffs);
+    }
+    load();
+  }, []);
 
   const handleEdit = (tariff: any) => {
     setEditingTariff({ ...tariff });
     setEditDialogOpen(true);
   };
 
-  const handleSaveEdit = () => {
-    if (editingTariff) {
-      setTariffs(tariffs.map(t => t.id === editingTariff.id ? editingTariff : t));
-      toast.success("Tariff updated successfully");
-      setEditDialogOpen(false);
-      setEditingTariff(null);
-    }
+  const handleSaveEdit = async () => {
+    if (!editingTariff)
+        return;
+    await updateTariffRate(
+        editingTariff,
+        editingTariff.rate
+    );
+    const refreshed =
+        await getTariffs();
+    setTariffs(refreshed);
+    toast.success("Tariff updated successfully");
+    setEditDialogOpen(false);
+    setEditingTariff(null);
   };
 
   return (
@@ -138,11 +159,7 @@ export function TariffManagement() {
             <div className="space-y-4 mt-4">
               <div className="space-y-2">
                 <Label htmlFor="edit-type">Tariff Type</Label>
-                <Input
-                  id="edit-type"
-                  value={editingTariff.type}
-                  onChange={(e) => setEditingTariff({ ...editingTariff, type: e.target.value })}
-                />
+                <div className="rounded-md border px-3 py-2 bg-gray-100 text-gray-700">{editingTariff.type}</div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-rate">Rate (TMN)</Label>
