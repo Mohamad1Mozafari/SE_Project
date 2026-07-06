@@ -6,6 +6,10 @@ The following project was assigned to students during the second semester of 404
 
 The project focuses on collaboration, AGILE methodolgy, and key software engineering concepts.
 
+برای مطالعه نسخه فارسی فایل معرفی، بر روی لینک زیر کلیک کنید.
+
+[Farsi README](/README_FA.md)
+
 ## Getting Started
 
 These instructions will give you a copy of the project up and running on
