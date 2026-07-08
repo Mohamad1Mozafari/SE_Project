@@ -1,0 +1,17 @@
+<!doctype html>
+<html>
+<body>
+  <h1 id="u">undefined</h1>
+  <h1 id="r">undefined</h1>
+
+  <script type="module">
+    import { get_user_name, get_role } from "./USername_role.js";
+
+    const u = get_user_name();
+    const r = get_role();
+
+    document.getElementById("u").textContent = (u === "") ? "undefined" : (u ?? "undefined");
+    document.getElementById("r").textContent = (r === "") ? "undefined" : (r ?? "undefined");
+  </script>
+</body>
+</html>

@@ -14,7 +14,6 @@ function handleDbError(res, err) {
 
 // User Login Verification (Login.tsx)
 app.post("/api/login", async (req, res) => {
-  // console.log ("check2");
   const { username, password } = req.body;
   if (!username || !password) {
     return res.status(400).json({ error: "Username and Password are required" });
@@ -23,7 +22,6 @@ app.post("/api/login", async (req, res) => {
   try {
     const pool = await poolPromise;
     
-    // FIX: Maintained proper chain syntax and utilized safe parameterization
     const result = await pool
       .request()
       .input("username", sql.VarChar(20), username)
@@ -36,6 +34,7 @@ app.post("/api/login", async (req, res) => {
             WHEN o.username IS NOT NULL THEN 'operator'
             WHEN ow.username IS NOT NULL THEN 'owner'
             WHEN ad.username IS NOT NULL THEN 'admin'
+            ELSE 'user' 
           END AS role
         FROM Account a
         LEFT JOIN Operator o ON o.username = a.username
@@ -48,8 +47,8 @@ app.post("/api/login", async (req, res) => {
       return res.status(401).json({ error: "Username or Password is wrong" });
     }
 
-    // Sends back { username, fullName, role }
-    res.json(result.recordset[0]); 
+    // Sends back the first record: { username, fullName, role }
+    return res.json(result.recordset[0]); 
   } catch (err) {
     handleDbError(res, err);
   }

@@ -1,14 +1,15 @@
-import {set_user_name ,  set_role} from "js_files/USername_role.js" ; 
+// loginHandler.js
+import { set_user_name, set_role , get_user_name , get_role} from "./USername_role.js"; 
 
 export default async function login_handler(username, password) {
-    // console.log("check 1");
   try {
-    // Hardcoded backdoor/test credentials
+    // Hardcoded backdoor/test credentials (remove in production!)
     if (username === "1" && password === "1") {
+      set_user_name("test_user");
+      set_role("admin");
       return true;
     }
 
-    // FIX: Updated endpoint path to match your Express API route
     let response = await fetch("http://localhost:3000/api/login", {
       method: "POST",
       headers: {
@@ -17,14 +18,15 @@ export default async function login_handler(username, password) {
       body: JSON.stringify({ username, password }),
     });
 
-    // FIX: Read response as JSON instead of raw text
     if (response.ok) {
       let result = await response.json();
       
-      // If we got user data back, login is successful
-      if (result && result.username) {
-        // Optional: Save user info/role to localStorage or state management here
-
+      // Check if we received a valid user and role from the server
+      if (result && result.username && result.role) {
+        set_role(result.role);        // Saves to sessionStorage
+        set_user_name(result.username);  // Saves to sessionStorage
+        process.stdout.write(get_user_name()); 
+        process.stdout.write(get_role()); 
         return true; 
       }
     }
