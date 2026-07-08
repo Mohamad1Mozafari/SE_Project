@@ -25,8 +25,6 @@ export default async function login_handler(username, password) {
       if (result && result.username && result.role) {
         set_role(result.role);        // Saves to sessionStorage
         set_user_name(result.username);  // Saves to sessionStorage
-        process.stdout.write(get_user_name()); 
-        process.stdout.write(get_role()); 
         return true; 
       }
     }

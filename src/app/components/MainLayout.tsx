@@ -1,10 +1,11 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
+// Imported your function helpers here
+import { get_role, get_user_name } from "../pages/USername_role.js";
 import { 
   LayoutDashboard, 
   LogIn, 
   LogOut, 
   Car, 
-  CarFront,
   ParkingSquare,
   Users,
   Clock,
@@ -21,6 +22,13 @@ export function MainLayout() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Call the functions directly and catch empty/null results with fallbacks
+  const roleValue = get_role();
+  const usernameValue = get_user_name();
+  
+  const currentRole = roleValue && roleValue.trim() !== "" ? roleValue : "undefined";
+  const currentUsername = usernameValue && usernameValue.trim() !== "" ? usernameValue : "undefined";
+
   const menuItems = [
     { path: "/app", icon: LayoutDashboard, label: "Dashboard", exact: true },
     { path: "/app/vehicle-entry", icon: LogIn, label: "Vehicle Entry" },
@@ -36,9 +44,6 @@ export function MainLayout() {
   ];
 
   const isActive = (path: string, exact?: boolean) => {
-    if (exact) {
-      return location.pathname === path;
-    }
     return location.pathname === path;
   };
 
@@ -85,10 +90,11 @@ export function MainLayout() {
 
         <Separator />
 
+        {/* Fixed lower left widget using the functional page properties */}
         <div className="p-4">
-          <div className="mb-3 px-3">
-            <p className="text-xs text-gray-500">Logged in as</p>
-            <p className="text-sm font-medium">Admin User</p>
+          <div className="mb-3 px-3 text-xs font-mono text-gray-600 space-y-0.5">
+            <p>logged as <span className="font-bold text-blue-600">{currentRole}</span></p>
+            <p>username is <span className="font-bold text-gray-900">{currentUsername}</span></p>
           </div>
           <Button
             onClick={handleLogout}

@@ -402,9 +402,9 @@ SELECT * FROM Vehicle;
 SELECT * FROM VehicleMovement;
 SELECT * FROM CostPolicy;
 SELECT * FROM WagePolicy;
-SELECT * FROM OperatorShift;
-SELECT * FROM ShiftChangeReq;
-SELECT * FROM OwnerReviewsShiftReq;
+SELECT * FROM ShiftManagement;
+SELECT * FROM ShiftRequest;
+SELECT * FROM ShiftReview;
 SELECT * FROM VehicleLog;
 SELECT * FROM TrafficLog;
 -----
