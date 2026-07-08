@@ -1,26 +1,4 @@
 //ShiftChangeRequest.js
-
-export async function current_shift_load (){
-  const response = await fetch("http://localhost:3000/api/shift_management/current_sift_all", { 
-    method: "GET",
-      headers: { "Content-Type": "application/json" },
-  });
-const result = await response.json();
-return result;
-}
-
-
-export async function requested_shift_load (){
-  const response = await fetch("http://localhost:3000/api/shift_management/requested_shift_all", { 
-    method: "GET",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username })
-  });
-const result = await response.json();
-return result;
-}
-
-
 export async function pending_request (username){
   const response = await fetch("http://localhost:3000/api/shift_management/pending_request_all", { 
     method: "GET",
