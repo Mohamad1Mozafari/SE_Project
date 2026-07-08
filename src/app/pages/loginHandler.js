@@ -1,5 +1,5 @@
 // loginHandler.js
-import { set_user_name, set_role , get_user_name , get_role} from "./USername_role.js"; 
+import { set_user_name, set_role } from "./USername_role.js"; 
 
 export default async function login_handler(username, password) {
   try {

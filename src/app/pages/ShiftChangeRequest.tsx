@@ -6,6 +6,13 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from "../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Textarea } from "../components/ui/textarea";
+import { get_user_name, get_role } from "./USername_role.js"; 
+if (get_role()=="admin"||get_role()=="owner"){
+import {new_request , current_shift_load , requested_shift_load , pending_request , aproved_request , rejected_request} from "./ShiftChangeRequest_admin_owner_view.js";
+}else {
+  import {new_request , current_shift_load , requested_shift_load , pending_request , aproved_request , rejected_request} from "./ShiftChangeRequest_operator_view.js";
+}
+
 
 export function ShiftChangeRequest() {
   const requests = [
