@@ -1,3 +1,5 @@
+import {set_user_name ,  set_role} from "js_files/USername_role.js" ; 
+
 export default async function login_handler(username, password) {
     // console.log("check 1");
   try {
@@ -22,6 +24,7 @@ export default async function login_handler(username, password) {
       // If we got user data back, login is successful
       if (result && result.username) {
         // Optional: Save user info/role to localStorage or state management here
+
         return true; 
       }
     }
