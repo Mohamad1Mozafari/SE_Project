@@ -2,6 +2,10 @@
 import { sql, poolPromise } from "./db.js";
 import express from 'express' ;
 import cors from "cors"; 
+import dayjs from 'dayjs';
+const currentDate = dayjs();
+let toDay = currentDate.format('YYYY-MM-DD') ; 
+
 const app = express();
 app.use(cors());
 app.use(express.json()); 
@@ -264,6 +268,9 @@ app.post("/api/user_management/add_user", async (req, res) => {
     handleDbError(res, err);
   }
 });
+/// load _morning , night  , evening use the Today 
+
+
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

@@ -1,9 +1,8 @@
 //ShiftChangeRequest.js
-export async function pending_request (username){
+export async function pending_request (){
   const response = await fetch("http://localhost:3000/api/shift_management/pending_request_all", { 
     method: "GET",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username })
   });
 const result = await response.json();
 return result;
@@ -12,16 +11,14 @@ export async function aproved_request (){
   const response = await fetch("http://localhost:3000/api/shift_management/aproved_request_all", { 
     method: "GET",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username })
   });
 const result = await response.json();
 return result;
 }
 export async function rejected_request (){
   const response = await fetch("http://localhost:3000/api/shift_management/aproved_request_all", { 
-    method: "POST",
+    method: "GET",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username })
   });
 const result = await response.json();
 return result;
