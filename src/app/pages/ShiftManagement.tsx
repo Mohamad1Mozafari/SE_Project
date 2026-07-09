@@ -3,12 +3,20 @@ import { ArrowRight, Clock, Plus, Calendar, X, Edit2, Check } from "lucide-react
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
-
+// can not edit the days before today 
 // Mock list of all available operators
 const ALL_OPERATORS = [
   "John Smith", "Emily Davis", "Sarah Johnson", 
   "James Wilson", "Mike Brown", "Alex Turner", "Lisa Wong"
 ];
+
+// import {Create_shift , } from 'ShiftManagement_page.js' ; 
+// import dayjs from 'dayjs';
+// const dayName = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
+// let day ; ///when we send info the ShiftManagement_page.js send data we convert that to index and then we send that 
+// let index_of_days = dayName.indexOf (day)
+// const currentDate = dayjs();
+// let toDay = currentDate.format('YYYY-MM-DD') ; 
 
 const INITIAL_SCHEDULE = [
   { day: "Monday", morning: ["John Smith"], evening: ["Sarah Johnson"], night: ["Mike Brown"] },
