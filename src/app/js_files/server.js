@@ -571,9 +571,10 @@ app.post("/api/shift_change_reuqest_operator/requested_shift", async (req, res) 
       .query(`
         SELECT shiftID, shiftDate, shiftType
         FROM ShiftManagement
-        WHERE operatorID <> @operatorID AND shiftDate >= @today AND status = 'Scheduled'
+        WHERE operatorID <> @operatorID AND shiftDate >= @today AND status <> 'Scheduled' 
         ORDER BY shiftDate, shiftType
-      `);
+      `);// WHERE operatorID == @operatorID AND shiftDate >= @today AND status <> 'Scheduled'  this for part  find the shift not for operators and not shedual for another user 
+      // and also it must find the free shifts not covered and free in next 7 day of that date 
 
     res.json(result.recordset);
   } catch (err) { handleDbError(res, err); }
