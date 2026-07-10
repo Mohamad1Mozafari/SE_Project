@@ -276,6 +276,35 @@ app.post("/api/vehicle-exit", async (req, res) => {
   }
 });
 
+
+// * Parking Status (ParkingStatus.tsx) *
+
+// GET the current status of every parking spot (occupied or available)
+app.get("/api/parking_status", async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request().query(`
+      SELECT s.location, v.plate_number, v.entrance_time
+      FROM Spot s
+      LEFT JOIN Vehicle v ON v.location = s.location
+      ORDER BY s.location
+    `);
+
+    const spots = result.recordset.map((row) => ({
+      location: row.location.trim(),
+      is_occupied: row.plate_number !== null,
+      plate_number: row.plate_number ? row.plate_number.trim() : null,
+      entrance_time: row.entrance_time,
+    }));
+
+    res.json(spots);
+  } catch (err) {
+    handleDbError(res, err);
+  }
+});
+
+
+
 app.get("/api/getTariffs", async (req, res) => {
   try {
     // ->AHMAD: connect this to database and optionally make it follow the ui style:
