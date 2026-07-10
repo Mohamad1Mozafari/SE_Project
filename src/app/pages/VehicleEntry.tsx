@@ -101,7 +101,7 @@ export function VehicleEntry() {
                       <SelectTrigger>
                         <SelectValue placeholder={isLoadingSpots ? "Loading spots..." : "Select available spot"} />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-[300px] overflow-y-auto">
                         {availableSpots.map((spot) => (
                           <SelectItem key={spot} value={spot}>
                             Spot {spot}
