@@ -1,3 +1,4 @@
+// ShiftManagement.tsx
 import React, { useState, useEffect } from "react";
 import { ArrowRight, Clock, Plus, Calendar, X, Check } from "lucide-react";
 import { Button } from "../components/ui/button";
@@ -22,7 +23,7 @@ const ALL_OPERATORS = [
   "James Wilson", "Mike Brown", "Alex Turner", "Lisa Wong"
 ];
 
-// Fallback initial schedule if API fails
+
 const INITIAL_SCHEDULE = [
   { day: "Monday", morning: [], evening: [], night: [] },
   { day: "Tuesday", morning: [], evening: [], night: [] },
