@@ -1,13 +1,19 @@
 // ShiftChangeRequest.tsx
 import React, { useState, useEffect } from "react";
-import { ArrowRight, CheckCircle, XCircle, Clock, Trash2 } from "lucide-react";
+import { ArrowRight, CheckCircle, XCircle, Clock, Trash2, Plus } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
+import { Label } from "../components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { get_user_name, get_role } from "./USername_role.js"; 
 
 // Import operator APIs
 import {
+  new_request,
+  current_shift_load,
+  requested_shift_load,
   pending_request as op_pending,
   aproved_request as op_approved,
   rejected_request as op_rejected
@@ -28,9 +34,17 @@ export function ShiftChangeRequest() {
   const [rejectedRequests, setRejectedRequests] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // States for the new request dialog form
+  const [currentShiftsOptions, setCurrentShiftsOptions] = useState<any[]>([]);
+  const [requestedShiftsOptions, setRequestedShiftsOptions] = useState<any[]>([]);
+  const [selectedCurrentShift, setSelectedCurrentShift] = useState<string>("");
+  const [selectedRequestedShift, setSelectedRequestedShift] = useState<string>("");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+
   const role = get_role();
   const isAdminOrOwner = role === "admin" || role === "owner";
 
+  // Load Request Lists Data
   const loadData = async () => {
     setIsLoading(true);
     try {
@@ -63,9 +77,10 @@ export function ShiftChangeRequest() {
           setRejectedRequests([]);
 
           // Only set the state for the table that matches the latest request status
-          if (latestRequest.status === "Pending" || latestRequest.status === "pending") {
+          const statusLower = latestRequest.status?.toLowerCase();
+          if (statusLower === "pending") {
             setPendingRequests([latestRequest]);
-          } else if (latestRequest.status === "Approved" || latestRequest.status === "approved") {
+          } else if (statusLower === "approved") {
             setApprovedRequests([latestRequest]);
           } else {
             setRejectedRequests([latestRequest]);
@@ -83,26 +98,55 @@ export function ShiftChangeRequest() {
     }
   };
 
+  // Load shift dropdown listings for Operator view
+  const loadDropdownOptions = async () => {
+    if (!isAdminOrOwner) {
+      try {
+        const currentShifts = await current_shift_load();
+        const requestedShifts = await requested_shift_load();
+        setCurrentShiftsOptions(currentShifts || []);
+        setRequestedShiftsOptions(requestedShifts || []);
+      } catch (error) {
+        console.error("Failed to load shift dropdown select fields", error);
+      }
+    }
+  };
+
   useEffect(() => {
     loadData();
+    loadDropdownOptions();
   }, [role]);
 
   // Action Handlers
   const handleApprove = async (id: number) => {
     await pending_request_approve_button(id);
-    loadData(); // Refresh the tables
+    loadData(); 
   };
 
   const handleReject = async (id: number) => {
     await pending_request_reject_button(id);
-    loadData(); // Refresh the tables
+    loadData(); 
   };
 
   const handleOperatorDelete = async (id: number) => {
-    // TODO: Create a delete endpoint in your API and connect it here
     console.log("Operator requested to delete request ID:", id);
-    // await delete_request_operator(id); 
-    // loadData();
+    // Add delete logic wrapper here if endpoint becomes available
+  };
+
+  const handleSubmitNewRequest = async () => {
+    if (!selectedCurrentShift || !selectedRequestedShift) {
+      alert("Please select both shifts before submitting.");
+      return;
+    }
+    try {
+      await new_request(Number(selectedCurrentShift), Number(selectedRequestedShift));
+      setIsDialogOpen(false); // Close modal
+      setSelectedCurrentShift(""); // Reset selection
+      setSelectedRequestedShift(""); // Reset selection
+      loadData(); // Re-fetch historical lists
+    } catch (error) {
+      console.error("Failed to submit new shift change request", error);
+    }
   };
 
   if (isLoading) {
@@ -129,6 +173,60 @@ export function ShiftChangeRequest() {
               : "Track the status of your recent shift change request"}
           </p>
         </div>
+
+        {/* Modal display condition: Rendered ONLY if user is an Operator */}
+        {!isAdminOrOwner && (
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="w-4 h-4 mr-2" />
+                New Request
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Submit Shift Change Request</DialogTitle>
+                <DialogDescription>Request a change to your assigned shift</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>Current Shift</Label>
+                  <Select value={selectedCurrentShift} onValueChange={setSelectedCurrentShift}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select current shift" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {currentShiftsOptions.map((shift) => (
+                        <SelectItem key={shift.id} value={String(shift.id)}>
+                          {shift.shift_name || `Shift ID: ${shift.id}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Requested Shift</Label>
+                  <Select value={selectedRequestedShift} onValueChange={setSelectedRequestedShift}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select desired shift" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {requestedShiftsOptions.map((shift) => (
+                        <SelectItem key={shift.id} value={String(shift.id)}>
+                          {shift.shift_name || `Shift ID: ${shift.id}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="flex justify-end gap-3">
+                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+                <Button onClick={handleSubmitNewRequest}>Submit Request</Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       {/* Stats - Rendered for both, but dynamically populated */}
@@ -186,9 +284,8 @@ export function ShiftChangeRequest() {
         )}
       </div>
 
-      {/* Requests List */}
+      {/* Requests Lists */}
       <div className="space-y-6">
-        
         {/* Pending Requests */}
         {pendingRequests.length > 0 && (
           <Card>
@@ -204,8 +301,8 @@ export function ShiftChangeRequest() {
                   <div key={request.id} className="border rounded-lg p-4 hover:bg-gray-50">
                     <div className="flex items-start justify-between mb-3">
                       <div>
-                        <h3 className="font-semibold text-gray-900">{request.requestedBy}</h3>
-                        <p className="text-sm text-gray-600">Requested on {request.date}</p>
+                        <h3 className="font-semibold text-gray-900">{request.requestedBy || get_user_name()}</h3>
+                        <p className="text-sm text-gray-600">Requested on {request.date || "Recent"}</p>
                       </div>
                       <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
                         {request.status}
@@ -225,12 +322,14 @@ export function ShiftChangeRequest() {
                         </p>
                       </div>
                     </div>
-                    <div className="mb-4">
-                      <p className="text-xs text-gray-500 mb-1">Reason</p>
-                      <p className="text-sm text-gray-700">{request.reason}</p>
-                    </div>
+                    {request.reason && (
+                      <div className="mb-4">
+                        <p className="text-xs text-gray-500 mb-1">Reason</p>
+                        <p className="text-sm text-gray-700">{request.reason}</p>
+                      </div>
+                    )}
                     
-                    {/* Role-based action buttons */}
+                    {/* Role-based action handlers */}
                     <div className="flex gap-3">
                       {isAdminOrOwner ? (
                         <>
@@ -272,8 +371,8 @@ export function ShiftChangeRequest() {
                   <div key={request.id} className="border rounded-lg p-4 bg-green-50">
                     <div className="flex items-start justify-between mb-3">
                       <div>
-                        <h3 className="font-semibold text-gray-900">{request.requestedBy}</h3>
-                        <p className="text-sm text-gray-600">Requested on {request.date}</p>
+                        <h3 className="font-semibold text-gray-900">{request.requestedBy || get_user_name()}</h3>
+                        <p className="text-sm text-gray-600">Requested on {request.date || "Recent"}</p>
                       </div>
                       <Badge className="bg-green-600">
                         {request.status}
@@ -311,8 +410,8 @@ export function ShiftChangeRequest() {
                   <div key={request.id} className="border rounded-lg p-4 bg-gray-50">
                     <div className="flex items-start justify-between mb-3">
                       <div>
-                        <h3 className="font-semibold text-gray-900">{request.requestedBy}</h3>
-                        <p className="text-sm text-gray-600">Requested on {request.date}</p>
+                        <h3 className="font-semibold text-gray-900">{request.requestedBy || get_user_name()}</h3>
+                        <p className="text-sm text-gray-600">Requested on {request.date || "Recent"}</p>
                       </div>
                       <Badge variant="destructive">
                         {request.status}
