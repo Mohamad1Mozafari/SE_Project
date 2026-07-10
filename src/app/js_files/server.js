@@ -278,6 +278,25 @@ const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Satu
 
 // ---- helpers ---------------------------------------------------------
 
+// ADDED: Missing helper function to resolve the select query layout for shift requests
+function shiftRequestSelect(whereClause = "") {
+  return `
+    SELECT 
+      sr.requestID AS id,
+      sr.operatorusername AS requestedBy,
+      FORMAT(sr.requestDate, 'yyyy-MM-dd HH:mm') AS date,
+      sr.status AS status,
+      CONCAT(curr.shiftType, ' (', FORMAT(curr.shiftDate, 'yyyy-MM-dd'), ')') AS currentShift,
+      CONCAT(req.shiftType, ' (', FORMAT(req.shiftDate, 'yyyy-MM-dd'), ')') AS requestedShift,
+      sr.reason_comment AS reason
+    FROM ShiftRequest sr
+    INNER JOIN ShiftManagement curr ON sr.currentShiftID = curr.shiftID
+    LEFT JOIN ShiftManagement req ON sr.requestedShiftID = req.shiftID
+    ${whereClause}
+    ORDER BY sr.requestID DESC
+  `;
+}
+
 async function resolveOperatorUsername(identifier) {
   if (!identifier) return null;
   const pool = await poolPromise;
