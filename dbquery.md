@@ -431,11 +431,9 @@ CREATE TABLE ShiftManagement (
 
     shiftDate DATE,
 
-    startTime TIME,
+    shift , check (morning , evening  , night )
 
-    endTime TIME,
-
-    status VARCHAR(20)
+    status VARCHAR(20) , put the check for each of the schudualed 
 
 );
 
@@ -447,11 +445,11 @@ CREATE TABLE ShiftRequest (
 
     shiftID INT,
 
-    operatorID VARCHAR(20),
+    operatorusername VARCHAR(20),
 
     requestType VARCHAR(20),
 
-    reason VARCHAR(255),
+    reason_comment VARCHAR(255),
 
     status VARCHAR(20),
 
@@ -475,7 +473,7 @@ CREATE TABLE ShiftReview (
 
     ownerID VARCHAR(20),
 
-    decision VARCHAR(20),
+    decision VARCHAR(20), check (accepted , pending , reject)
 
     feedback VARCHAR(255),
 

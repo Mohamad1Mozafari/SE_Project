@@ -10,7 +10,7 @@ import { get_user_name, get_role } from "./USername_role.js";
 if (get_role()=="admin"||get_role()=="owner"){
 import {pending_request , aproved_request , rejected_request} from "./ShiftChangeRequest_admin_owner_view.js";
 }else {
-  import {new_request , current_shift_load , requested_shift_load , pending_request , aproved_request , rejected_request} from "./ShiftChangeRequest_operator_view.js";
+  import {new_request , current_shift_load , requested_shift_load  , aproved_request , rejected_request} from "./ShiftChangeRequest_operator_view.js";
 }
 
 
@@ -165,16 +165,6 @@ if (get_role()=="operator"){
                     <div className="mb-4">
                       <p className="text-xs text-gray-500 mb-1">Reason</p>
                       <p className="text-sm text-gray-700">{request.reason}</p>
-                    </div>
-                    <div className="flex gap-3">
-                      <Button size="sm" className="bg-green-600 hover:bg-green-700">
-                        <CheckCircle className="w-4 h-4 mr-2" />
-                        Approve
-                      </Button>
-                      <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700">
-                        <XCircle className="w-4 h-4 mr-2" />
-                        Reject
-                      </Button>
                     </div>
                   </div>
                 ))}

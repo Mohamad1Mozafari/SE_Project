@@ -24,3 +24,24 @@ const result = await response.json();
 return result;
 }
 
+export async function pending_request_approve_button (shiftchangerequestID){
+  const response = await fetch("http://localhost:3000/api/shift_management/pending_request_approve_button", { 
+    method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ shiftchangerequestID })
+  });
+const result = await response.json();
+return result;
+}
+
+export async function pending_request_reject_button (shiftchangerequestID){
+  const response = await fetch("http://localhost:3000/api/shift_management/pending_request_reject_button", { 
+    method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ shiftchangerequestID })
+  });
+const result = await response.json();
+return result;
+}
+
+
