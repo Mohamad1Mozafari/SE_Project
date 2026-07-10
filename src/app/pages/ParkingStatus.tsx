@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { ArrowRight, Car, CheckCircle } from "lucide-react";
+import { ArrowRight, Car, CheckCircle, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
+import { Button } from "../components/ui/button";
 import { toast } from "sonner";
 import get_parking_status from "./ParkingStatusHandler";
 
@@ -24,6 +25,7 @@ function parseSpot(location: string): { section: string; number: string } {
 export function ParkingStatus() {
   const [spots, setSpots] = useState<ParkingSpotStatus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const loadStatus = useCallback(async (showErrorToast = true) => {
     const result = await get_parking_status();
@@ -40,6 +42,7 @@ export function ParkingStatus() {
         };
       });
       setSpots(mapped);
+      setLastUpdated(new Date());
     } else if (showErrorToast) {
       toast.error("Failed to load parking status");
     }
@@ -49,6 +52,9 @@ export function ParkingStatus() {
 
   useEffect(() => {
     loadStatus();
+    // Keep the view fresh automatically every 15 seconds
+    const interval = setInterval(() => loadStatus(false), 15000);
+    return () => clearInterval(interval);
   }, [loadStatus]);
 
   const totalSpots = spots.length;
@@ -65,9 +71,22 @@ export function ParkingStatus() {
         <span className="text-gray-900 font-medium">Parking Status</span>
       </div>
 
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Parking Status</h1>
-        <p className="text-gray-600 mt-1">The status of all parking spots</p>
+      <div className="mb-8 flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Parking Status</h1>
+          <p className="text-gray-600 mt-1">Real-time view of all parking spots</p>
+        </div>
+        <div className="flex items-center gap-3">
+          {lastUpdated && (
+            <span className="text-xs text-gray-500">
+              Updated {lastUpdated.toLocaleTimeString()}
+            </span>
+          )}
+          <Button variant="outline" size="sm" onClick={() => loadStatus()} disabled={isLoading}>
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -145,7 +164,7 @@ export function ParkingStatus() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-5 sm:grid-cols-10 md:grid-cols-[repeat(15,minmax(0,1fr))] lg:grid-cols-[repeat(20,minmax(0,1fr))] gap-2">
+                    <div className="grid grid-cols-5 sm:grid-cols-10 md:grid-cols-[repeat(10,minmax(0,1fr))] lg:grid-cols-[repeat(10,minmax(0,1fr))] gap-2">
                       {sectionSpots.map((spot) => (
                         <div
                           key={spot.id}
