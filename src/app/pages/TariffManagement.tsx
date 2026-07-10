@@ -9,6 +9,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { toast } from "sonner";
 import { getTariffs, updateTariffRate } from "../services/TariffServices";
 
+// ->OMID: make the 'description' field of the edit form constant (user shouldn't change it)
+// ->OMID: if we are going to make the 'description' field constant like the 'Tariff type' field
+// then maybe we should remove both of them altogether.
+
 interface Tariff {
     id: number;
     type: string;

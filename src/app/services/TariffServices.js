@@ -28,7 +28,7 @@ async function loadTariffs() {
     
     // tariffList = await getTariffs();
     const response =
-        await fetch("http://localhost:4000/api/getTariffs");
+        await fetch("http://localhost:3000/api/getTariffs");
 
     tariffList = await response.json();
     tariffMap.clear();
@@ -71,7 +71,7 @@ export async function updateTariffRate(tariff, newRate) {
 
     const response =
         await fetch(
-            "http://localhost:4000/api/updateTariff",
+            "http://localhost:3000/api/updateTariff",
             {
                 method: "POST",
                 headers: {
