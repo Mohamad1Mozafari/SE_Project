@@ -1,4 +1,3 @@
-// ShiftManagement.tsx
 import React, { useState, useEffect } from "react";
 import { ArrowRight, Clock, Plus, Calendar, X, Check } from "lucide-react";
 import { Button } from "../components/ui/button";
@@ -8,37 +7,31 @@ import dayjs from 'dayjs';
 
 import {
   Create_shift,
+  Operators_load,
   Morning_shift_load,
   Evening_shift_load,
   Night_shift_load,
   Weekly_Schedule_load,
-  Previous_Week_Schedule_load,
-  Next_Week_Schedule_load,
   Shift_Coverage_load,
   Weekly_Schedule_edit
 } from './ShiftManagement_page';
 
-const ALL_OPERATORS = [
-  "John Smith", "Emily Davis", "Sarah Johnson", 
-  "James Wilson", "Mike Brown", "Alex Turner", "Lisa Wong"
-];
-
-
-const INITIAL_SCHEDULE = [
-  { day: "Monday", morning: [], evening: [], night: [] },
-  { day: "Tuesday", morning: [], evening: [], night: [] },
-  { day: "Wednesday", morning: [], evening: [], night: [] },
-  { day: "Thursday", morning: [], evening: [], night: [] },
-  { day: "Friday", morning: [], evening: [], night: [] },
-  { day: "Saturday", morning: [], evening: [], night: [] },
-  { day: "Sunday", morning: [], evening: [], night: [] },
-];
+interface ScheduleRow {
+  day: string;
+  date: string;
+  morning: string[];
+  evening: string[];
+  night: string[];
+}
 
 export function ShiftManagement() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   
-  const [schedule, setSchedule] = useState(INITIAL_SCHEDULE);
+  // Dynamic State variables
+  const [operatorsList, setOperatorsList] = useState<string[]>([]);
+  const [weekOffset, setWeekOffset] = useState<number>(0);
+  const [schedule, setSchedule] = useState<ScheduleRow[]>([]);
   const [coverage, setCoverage] = useState({ covered: 0, uncovered: 0 });
   const [todayShifts, setTodayShifts] = useState({
     morning: [],
@@ -48,31 +41,40 @@ export function ShiftManagement() {
 
   const [editingCell, setEditingCell] = useState<{
     day: string;
+    date: string;
     shiftType: string;
     operators: string[];
   } | null>(null);
 
-  // New Create Shift Modal States
   const [newShiftDate, setNewShiftDate] = useState(dayjs().format('YYYY-MM-DD'));
   const [newShiftTime, setNewShiftTime] = useState("Morning");
   const [newShiftOperators, setNewShiftOperators] = useState<string[]>([]);
 
-  // Calculate standard ISO weekday (1 = Monday, 7 = Sunday) to determine if a day is in the past
-  const currentDayIndex = dayjs().day() === 0 ? 7 : dayjs().day();
-  const dayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-
-  const canEditDay = (dayName: string) => {
-    const rowDayIndex = dayNames.indexOf(dayName) + 1;
-    return rowDayIndex >= currentDayIndex;
+  // Validates schedule mutations by checking absolute chronological dates
+  const canEditDay = (targetDateString: string) => {
+    return !dayjs(targetDateString).isBefore(dayjs(), 'day');
   };
 
   useEffect(() => {
-    loadDashboardData();
+    // Loads static directories once per session setup
+    async function fetchOperators() {
+      try {
+        const ops = await Operators_load();
+        if (Array.isArray(ops)) setOperatorsList(ops);
+      } catch (err) {
+        console.error("Failed parsing operators catalog context", err);
+      }
+    }
+    fetchOperators();
   }, []);
 
-  const loadDashboardData = async () => {
+  // Reloads data dynamically whenever the selected week changes
+  useEffect(() => {
+    loadDashboardData(weekOffset);
+  }, [weekOffset]);
+
+  const loadDashboardData = async (offset: number) => {
     try {
-      // Load Today's Shifts
       const morningRes = await Morning_shift_load();
       const eveningRes = await Evening_shift_load();
       const nightRes = await Night_shift_load();
@@ -83,12 +85,10 @@ export function ShiftManagement() {
         night: nightRes?.operators || []
       });
 
-      // Load Weekly Schedule
-      const weeklyRes = await Weekly_Schedule_load();
-      if (weeklyRes && weeklyRes.length > 0) setSchedule(weeklyRes);
+      const weeklyRes = await Weekly_Schedule_load(offset);
+      if (weeklyRes) setSchedule(weeklyRes);
 
-      // Load Coverage Stats
-      const coverageRes = await Shift_Coverage_load();
+      const coverageRes = await Shift_Coverage_load(offset);
       if (coverageRes) setCoverage(coverageRes);
 
     } catch (error) {
@@ -96,23 +96,18 @@ export function ShiftManagement() {
     }
   };
 
-  const loadPreviousWeek = async () => {
-    const res = await Previous_Week_Schedule_load();
-    if (res) setSchedule(res);
-  };
-
-  const loadNextWeek = async () => {
-    const res = await Next_Week_Schedule_load();
-    if (res) setSchedule(res);
-  };
-
-  const handleCellClick = (day: string, shiftType: string, operators: string[]) => {
+  const handleCellClick = (row: ScheduleRow, shiftDisplay: string, operatorsList: string[]) => {
     if (!isEditMode) return;
-    if (!canEditDay(day)) {
-      alert(`You cannot edit past schedules for ${day}.`);
+    if (!canEditDay(row.date)) {
+      alert(`You cannot modify historical data parameters tracking for context: ${row.day} (${row.date}).`);
       return;
     }
-    setEditingCell({ day, shiftType, operators });
+    setEditingCell({ 
+      day: row.day, 
+      date: row.date, 
+      shiftType: shiftDisplay, 
+      operators: operatorsList 
+    });
   };
 
   const toggleOperatorSelection = (operator: string) => {
@@ -136,24 +131,32 @@ export function ShiftManagement() {
   const handleCreateNewShift = async () => {
     await Create_shift(newShiftOperators, newShiftTime, newShiftDate);
     setIsCreateModalOpen(false);
-    loadDashboardData(); // Refresh UI
+    setNewShiftOperators([]);
+    loadDashboardData(weekOffset); 
   };
 
   const handleUpdateSchedule = async () => {
     if (!editingCell) return;
     
-    // Prepare API JSON Format
-    const jsonPayload = editingCell.operators.map(op => ({
-      username: op,
-      day: editingCell.day,
-      shift: editingCell.shiftType.toLowerCase().split(" ")[0] // extracts 'morning', 'evening', etc.
-    }));
+    const parsedShiftKey = editingCell.shiftType.toLowerCase().split(" ")[0]; 
 
-    await Weekly_Schedule_edit(JSON.stringify(jsonPayload));
+    // Processes structural adjustments sequentially over mapped network frames
+    for (const operator of operatorsList) {
+      const wasSelected = editingCell.operators.includes(operator);
+      
+      if (wasSelected) {
+        const payload = {
+          username: operator,
+          day: editingCell.day,
+          date: editingCell.date,
+          shift: parsedShiftKey
+        };
+        await Weekly_Schedule_edit(payload);
+      }
+    }
 
-    // Optimistic UI Update
     setSchedule(prevSchedule => prevSchedule.map(row => {
-      if (row.day === editingCell.day) {
+      if (row.date === editingCell.date) {
         if (editingCell.shiftType.includes("Morning")) return { ...row, morning: editingCell.operators };
         if (editingCell.shiftType.includes("Evening")) return { ...row, evening: editingCell.operators };
         if (editingCell.shiftType.includes("Night")) return { ...row, night: editingCell.operators };
@@ -162,6 +165,9 @@ export function ShiftManagement() {
     }));
     
     setEditingCell(null);
+    // Refresh statistics calculation states dynamically
+    const coverageRes = await Shift_Coverage_load(weekOffset);
+    if (coverageRes) setCoverage(coverageRes);
   };
 
   const shifts = [
@@ -189,7 +195,7 @@ export function ShiftManagement() {
         </Button>
       </div>
 
-      {/* Today's Shifts */}
+      {/* Today's Shift Snapshots */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         {shifts.map((shift) => (
           <Card key={shift.id}>
@@ -219,16 +225,16 @@ export function ShiftManagement() {
         ))}
       </div>
 
-      {/* Weekly Schedule */}
+      {/* Weekly Roster Component Matrix Grid */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Calendar className="w-5 h-5" />
-                Weekly Schedule
+                Weekly Schedule View {weekOffset !== 0 && `(Offset: ${weekOffset > 0 ? `+${weekOffset}` : weekOffset} Weeks)`}
               </CardTitle>
-              <CardDescription>Current week operator assignments</CardDescription>
+              <CardDescription>Target operations assignment distribution maps tracking structure</CardDescription>
             </div>
             <Button 
               variant={isEditMode ? "default" : "outline"} 
@@ -243,7 +249,7 @@ export function ShiftManagement() {
             <table className="w-full border-collapse">
               <thead>
                 <tr className="border-b">
-                  <th className="text-left py-3 px-4 font-medium text-gray-900 w-1/4">Day</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-900 w-1/4">Day & Date</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-900 w-1/4">Morning (6AM-2PM)</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-900 w-1/4">Evening (2PM-10PM)</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-900 w-1/4">Night (10PM-6AM)</th>
@@ -251,18 +257,19 @@ export function ShiftManagement() {
               </thead>
               <tbody>
                 {schedule.map((row, index) => {
-                  const isPast = !canEditDay(row.day);
+                  const isPast = !canEditDay(row.date);
                   return (
                     <tr key={index} className={`border-b transition-colors align-top ${isPast && isEditMode ? 'bg-gray-100 opacity-70' : 'hover:bg-gray-50'}`}>
                       <td className="py-4 px-4 font-medium text-gray-900">
-                        {row.day}
-                        {isPast && isEditMode && <span className="ml-2 text-xs text-red-500">(Past)</span>}
+                        <div className="font-semibold">{row.day}</div>
+                        <div className="text-xs text-gray-500 font-normal mt-0.5">{row.date}</div>
+                        {isPast && isEditMode && <span className="block mt-1 text-xs text-red-500 font-medium">(Past)</span>}
                       </td>
                       
-                      {/* Morning Cell */}
+                      {/* Morning Slot Allocation */}
                       <td 
                         className={`py-3 px-4 h-full ${isEditMode && !isPast ? 'cursor-pointer hover:bg-blue-50 border-2 border-transparent hover:border-blue-200 rounded-md transition-all' : (isEditMode && isPast ? 'cursor-not-allowed' : '')}`}
-                        onClick={() => handleCellClick(row.day, "Morning (6AM-2PM)", row.morning)}
+                        onClick={() => handleCellClick(row, "Morning (6AM-2PM)", row.morning)}
                       >
                         <div className="flex flex-col gap-1.5 items-start">
                           {row.morning.map((op, i) => (
@@ -278,10 +285,10 @@ export function ShiftManagement() {
                         </div>
                       </td>
 
-                      {/* Evening Cell */}
+                      {/* Evening Slot Allocation */}
                       <td 
                         className={`py-3 px-4 h-full ${isEditMode && !isPast ? 'cursor-pointer hover:bg-orange-50 border-2 border-transparent hover:border-orange-200 rounded-md transition-all' : (isEditMode && isPast ? 'cursor-not-allowed' : '')}`}
-                        onClick={() => handleCellClick(row.day, "Evening (2PM-10PM)", row.evening)}
+                        onClick={() => handleCellClick(row, "Evening (2PM-10PM)", row.evening)}
                       >
                         <div className="flex flex-col gap-1.5 items-start">
                           {row.evening.map((op, i) => (
@@ -297,10 +304,10 @@ export function ShiftManagement() {
                         </div>
                       </td>
 
-                      {/* Night Cell */}
+                      {/* Night Slot Allocation */}
                       <td 
                         className={`py-3 px-4 h-full ${isEditMode && !isPast ? 'cursor-pointer hover:bg-purple-50 border-2 border-transparent hover:border-purple-200 rounded-md transition-all' : (isEditMode && isPast ? 'cursor-not-allowed' : '')}`}
-                        onClick={() => handleCellClick(row.day, "Night (10PM-6AM)", row.night)}
+                        onClick={() => handleCellClick(row, "Night (10PM-6AM)", row.night)}
                       >
                         <div className="flex flex-col gap-1.5 items-start">
                           {row.night.map((op, i) => (
@@ -324,12 +331,12 @@ export function ShiftManagement() {
         </CardContent>
       </Card>
 
-      {/* Bottom Cards Section */}
+      {/* Information Statistics and Dynamic Navigation Panel */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
         <Card>
           <CardHeader>
             <CardTitle>Shift Coverage</CardTitle>
-            <CardDescription>Current week coverage statistics</CardDescription>
+            <CardDescription>Current selected week coverage metrics calculation metrics</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex justify-between items-center">
@@ -352,23 +359,29 @@ export function ShiftManagement() {
         <Card>
           <CardHeader>
             <CardTitle>Quick Actions</CardTitle>
-            <CardDescription>Schedule navigation</CardDescription>
+            <CardDescription>Schedule timeline shifting controls</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Button variant="outline" className="w-full justify-start" onClick={loadPreviousWeek}>
+            <Button variant="outline" className="w-full justify-start" onClick={() => setWeekOffset(prev => prev - 1)}>
               <ArrowRight className="w-4 h-4 mr-2 rotate-180" />
               View Previous Week Schedule
             </Button>
-            <Button variant="outline" className="w-full justify-start" onClick={loadNextWeek}>
+            <Button variant="outline" className="w-full justify-start" onClick={() => setWeekOffset(prev => prev + 1)}>
               <ArrowRight className="w-4 h-4 mr-2" />
               View Next Week Schedule
             </Button>
+            {weekOffset !== 0 && (
+              <Button variant="ghost" className="w-full justify-start text-blue-600 hover:text-blue-700" onClick={() => setWeekOffset(0)}>
+                Reset to Current Week
+              </Button>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* --- MODALS --- */}
+      {/* --- MODALS SECTION --- */}
 
+      {/* Creation Modal View Handler Layout */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <Card className="w-full max-w-md shadow-xl">
@@ -403,9 +416,9 @@ export function ShiftManagement() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Assign Operators (Multiple)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Assign Operators (Database Driven)</label>
                 <div className="max-h-40 overflow-y-auto border rounded-md p-2 space-y-2">
-                  {ALL_OPERATORS.map((op) => (
+                  {operatorsList.map((op) => (
                     <label key={op} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
                       <input 
                         type="checkbox" 
@@ -427,13 +440,14 @@ export function ShiftManagement() {
         </div>
       )}
 
+      {/* Editing Cell Modal View Handler Layout */}
       {editingCell && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <Card className="w-full max-w-sm shadow-xl">
             <CardHeader className="flex flex-row items-center justify-between border-b pb-4">
               <div>
                 <CardTitle className="text-lg">Edit Shift</CardTitle>
-                <CardDescription>{editingCell.day} • {editingCell.shiftType}</CardDescription>
+                <CardDescription>{editingCell.day} ({editingCell.date}) • {editingCell.shiftType}</CardDescription>
               </div>
               <Button variant="ghost" size="sm" onClick={() => setEditingCell(null)}>
                 <X className="w-4 h-4" />
@@ -443,7 +457,7 @@ export function ShiftManagement() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Select Operators</label>
                 <div className="space-y-2 border rounded-md p-2 max-h-60 overflow-y-auto">
-                  {ALL_OPERATORS.map((op) => {
+                  {operatorsList.map((op) => {
                     const isSelected = editingCell.operators.includes(op);
                     return (
                       <div 

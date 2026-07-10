@@ -274,14 +274,10 @@ app.post("/api/user_management/add_user", async (req, res) => {
 // Requires: sql, poolPromise, dayjs, toDay, handleDbError — all already
 // declared at the top of your server.js, so no new imports needed.
 // =====================================================================
-
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 // ---- helpers ---------------------------------------------------------
 
-// Your frontend sometimes sends a real username, sometimes a display
-// name (e.g. ALL_OPERATORS = ["John Smith", ...]). This resolves either
-// one to the actual Operator username stored in Account/Operator.
 async function resolveOperatorUsername(identifier) {
   if (!identifier) return null;
   const pool = await poolPromise;
@@ -296,7 +292,6 @@ async function resolveOperatorUsername(identifier) {
   return result.recordset[0]?.username || null;
 }
 
-// Returns the Monday..Sunday dayjs dates for "this week + offsetWeeks".
 function getWeekDates(offsetWeeks = 0) {
   const base = dayjs().add(offsetWeeks * 7, "day");
   const isoDay = base.day() === 0 ? 7 : base.day(); // Mon=1 ... Sun=7
@@ -345,8 +340,9 @@ async function loadWeekSchedule(offsetWeeks) {
 
 async function loadTodayShift(shiftType) {
   const pool = await poolPromise;
+  const currentTodayStr = dayjs().format('YYYY-MM-DD'); // Prevents stale values over long server runtimes
   const result = await pool.request()
-    .input("today", sql.Date, toDay)
+    .input("today", sql.Date, currentTodayStr)
     .input("shiftType", sql.VarChar(10), shiftType)
     .query(`
       SELECT a.full_name
@@ -358,30 +354,26 @@ async function loadTodayShift(shiftType) {
   return result.recordset.map(r => r.full_name);
 }
 
-// Shapes a ShiftRequest row into what ShiftChangeRequest.tsx expects:
-// { id, requestedBy, date, status, currentShift, requestedShift, reason }
-function shiftRequestSelect(whereClause) {
-  return `
-    SELECT
-      sr.requestID AS id,
-      a.full_name AS requestedBy,
-      CONVERT(varchar(10), sr.requestDate, 23) AS date,
-      sr.status AS status,
-      CONVERT(varchar(10), cur.shiftDate, 23) + ' ' + cur.shiftType AS currentShift,
-      CONVERT(varchar(10), req.shiftDate, 23) + ' ' + req.shiftType AS requestedShift,
-      sr.reason_comment AS reason
-    FROM ShiftRequest sr
-    INNER JOIN Account a ON a.username = sr.operatorusername
-    INNER JOIN ShiftManagement cur ON cur.shiftID = sr.currentShiftID
-    LEFT JOIN ShiftManagement req ON req.shiftID = sr.requestedShiftID
-    ${whereClause}
-    ORDER BY sr.requestDate DESC
-  `;
-}
+// =====================================================================
+// SHIFT MANAGEMENT ENDPOINTS
+// =====================================================================
 
-// =====================================================================
-// SHIFT MANAGEMENT (ShiftManagement_page.js)
-// =====================================================================
+// 1. Fetch all system operators dynamically from database
+app.get("/api/shift_management/Operators", async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.query(`
+      SELECT a.full_name 
+      FROM Account a
+      INNER JOIN Operator o ON o.username = a.username
+      ORDER BY a.full_name ASC
+    `);
+    const operatorNames = result.recordset.map(r => r.full_name);
+    res.json(operatorNames);
+  } catch (err) {
+    handleDbError(res, err);
+  }
+});
 
 app.get("/api/shift_management/Morning_shift_load", async (req, res) => {
   try { res.json({ operators: await loadTodayShift("Morning") }); }
@@ -398,24 +390,18 @@ app.get("/api/shift_management/Night_shift_load", async (req, res) => {
   catch (err) { handleDbError(res, err); }
 });
 
+// Consolidates structural load routines into single dynamic offset processor
 app.get("/api/shift_management/Weekly_Schedule_load", async (req, res) => {
-  try { res.json(await loadWeekSchedule(0)); }
-  catch (err) { handleDbError(res, err); }
-});
-
-app.get("/api/shift_management/Previous_Week_Schedule_load", async (req, res) => {
-  try { res.json(await loadWeekSchedule(-1)); }
-  catch (err) { handleDbError(res, err); }
-});
-
-app.get("/api/shift_management/Next_Week_Schedule_load", async (req, res) => {
-  try { res.json(await loadWeekSchedule(1)); }
-  catch (err) { handleDbError(res, err); }
+  try {
+    const offset = parseInt(req.query.offset) || 0;
+    res.json(await loadWeekSchedule(offset));
+  } catch (err) { handleDbError(res, err); }
 });
 
 app.get("/api/shift_management/Shift_Coverage_load", async (req, res) => {
   try {
-    const weekDates = getWeekDates(0);
+    const offset = parseInt(req.query.offset) || 0;
+    const weekDates = getWeekDates(offset);
     const startDate = weekDates[0].format("YYYY-MM-DD");
     const endDate = weekDates[6].format("YYYY-MM-DD");
 
@@ -430,7 +416,7 @@ app.get("/api/shift_management/Shift_Coverage_load", async (req, res) => {
       `);
 
     const covered = result.recordset.length;
-    const totalSlots = 7 * 3; // 7 days x 3 shift types
+    const totalSlots = 7 * 3; 
     const uncovered = Math.max(totalSlots - covered, 0);
 
     res.json({ covered, uncovered });
@@ -466,64 +452,44 @@ app.post("/api/shift_management/Create_shift", async (req, res) => {
           `);
         inserted.push(username);
       } catch (e) {
-        // Most likely the UNIQUE(operatorID, shiftDate, shiftType) constraint —
-        // that operator is already scheduled for that slot.
         skipped.push(identifier);
       }
     }
-
     res.json({ success: true, inserted, skipped });
   } catch (err) { handleDbError(res, err); }
 });
 
-// NOTE: this endpoint can only ADD an operator to a day/shift cell.
-// Your ShiftManagement_page.js only ever sends the operators that should
-// be IN the cell, one call per operator — it never tells the server who
-// was removed. So removals from a cell are not reflected in the DB with
-// the current frontend contract. If you want real "replace the whole
-// cell" behavior, Weekly_Schedule_edit would need to send the full
-// operator list for the cell in a single call instead of looping.
 app.post("/api/shift_management/Weekly_Schedule_edit", async (req, res) => {
   try {
-    const { shift, day, username } = req.body;
-    const dayIndex = DAY_NAMES.indexOf(day);
-    if (dayIndex === -1) return res.status(400).json({ error: "Invalid day" });
+    const { shift, day, username, date } = req.body; // Front-end now passes explicit target date
+    const mappedUsername = await resolveOperatorUsername(username);
 
-    const shiftType = String(shift).charAt(0).toUpperCase() + String(shift).slice(1).toLowerCase();
-    if (!["Morning", "Evening", "Night"].includes(shiftType)) {
-      return res.status(400).json({ error: "Invalid shift type" });
+    if (!mappedUsername) {
+      return res.status(400).json({ error: "Operator not found" });
     }
-
-    const shiftDate = getWeekDates(0)[dayIndex].format("YYYY-MM-DD");
-
-    const operatorUsername = await resolveOperatorUsername(username);
-    if (!operatorUsername) return res.status(404).json({ error: "Operator not found" });
 
     const pool = await poolPromise;
-    const existing = await pool.request()
-      .input("operatorID", sql.VarChar(20), operatorUsername)
-      .input("shiftDate", sql.Date, shiftDate)
-      .input("shiftType", sql.VarChar(10), shiftType)
-      .query(`
-        SELECT shiftID FROM ShiftManagement
-        WHERE operatorID = @operatorID AND shiftDate = @shiftDate AND shiftType = @shiftType
-      `);
+    // Standardizes database casing formatting structure
+    const formattedShift = shift.charAt(0).toUpperCase() + shift.slice(1).toLowerCase();
 
-    if (existing.recordset.length === 0) {
-      await pool.request()
-        .input("operatorID", sql.VarChar(20), operatorUsername)
-        .input("shiftDate", sql.Date, shiftDate)
-        .input("shiftType", sql.VarChar(10), shiftType)
-        .query(`
+    await pool.request()
+      .input("operatorID", sql.VarChar(20), mappedUsername)
+      .input("shiftDate", sql.Date, date)
+      .input("shiftType", sql.VarChar(10), formattedShift)
+      .query(`
+        IF NOT EXISTS (
+          SELECT 1 FROM ShiftManagement 
+          WHERE operatorID = @operatorID AND shiftDate = @shiftDate AND shiftType = @shiftType AND status <> 'Cancelled'
+        )
+        BEGIN
           INSERT INTO ShiftManagement (operatorID, shiftDate, shiftType, status)
           VALUES (@operatorID, @shiftDate, @shiftType, 'Scheduled')
-        `);
-    }
+        END
+      `);
 
     res.json("success");
   } catch (err) {
-    console.error(err);
-    res.status(500).json("error");
+    res.status(500).json(err.message);
   }
 });
 
