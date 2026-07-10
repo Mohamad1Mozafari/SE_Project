@@ -102,72 +102,87 @@ CREATE TABLE WagePolicy (
         ON DELETE SET NULL
 );
 
+
 CREATE TABLE ShiftManagement (
+    shiftID     INT IDENTITY(1,1) PRIMARY KEY,
+    operatorID  VARCHAR(20) NOT NULL,
+    shiftDate   DATE        NOT NULL,
+    shiftType   VARCHAR(10) NOT NULL,
+    status      VARCHAR(20) NOT NULL DEFAULT 'Scheduled',
 
-    shiftID INT IDENTITY(1,1) PRIMARY KEY,
+    CONSTRAINT FK_ShiftManagement_Operator
+        FOREIGN KEY (operatorID) REFERENCES Operator(username)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE,
 
-    operatorID VARCHAR(20),
+    CONSTRAINT CK_ShiftManagement_ShiftType
+        CHECK (shiftType IN ('Morning', 'Evening', 'Night')),
 
-    shiftDate DATE,
+    CONSTRAINT CK_ShiftManagement_Status
+        CHECK (status IN ('Scheduled', 'Completed', 'Cancelled')),
 
-    startTime TIME,
-
-    endTime TIME,
-
-    status VARCHAR(20)
-
+    -- Prevents the same operator being double-booked into the same slot
+    CONSTRAINT UQ_ShiftManagement_Slot
+        UNIQUE (operatorID, shiftDate, shiftType)
 );
+GO
 
-
-
+-- =========================================================
+-- ShiftRequest
+-- An operator's request to move from one scheduled shift (currentShiftID)
+-- to another (requestedShiftID).
+-- Renamed operatorID -> operatorusername and reason -> reason_comment,
+-- as you asked. Also fixed the FK, which pointed at a column
+-- (operatorID) that didn't exist in your draft.
+-- =========================================================
 CREATE TABLE ShiftRequest (
+    requestID         INT IDENTITY(1,1) PRIMARY KEY,
+    currentShiftID    INT NOT NULL,
+    requestedShiftID  INT NULL,
+    operatorusername  VARCHAR(20) NOT NULL,
+    requestType       VARCHAR(20) NOT NULL DEFAULT 'ShiftChange',
+    reason_comment    VARCHAR(255),
+    status            VARCHAR(20) NOT NULL DEFAULT 'Pending',
+    requestDate       DATETIME DEFAULT GETDATE(),
 
-    requestID INT IDENTITY(1,1) PRIMARY KEY,
+    CONSTRAINT FK_ShiftRequest_CurrentShift
+        FOREIGN KEY (currentShiftID) REFERENCES ShiftManagement(shiftID),
 
-    shiftID INT,
+    CONSTRAINT FK_ShiftRequest_RequestedShift
+        FOREIGN KEY (requestedShiftID) REFERENCES ShiftManagement(shiftID),
 
-    operatorID VARCHAR(20),
+    CONSTRAINT FK_ShiftRequest_Operator
+        FOREIGN KEY (operatorusername) REFERENCES Operator(username)
+        ON DELETE CASCADE,
 
-    requestType VARCHAR(20),
-
-    reason VARCHAR(255),
-
-    status VARCHAR(20),
-
-    requestDate DATETIME DEFAULT GETDATE(),
-
-
-
-    FOREIGN KEY (shiftID) REFERENCES ShiftManagement(shiftID),
-
-    FOREIGN KEY (operatorID) REFERENCES Operator(username)
-
+    CONSTRAINT CK_ShiftRequest_Status
+        CHECK (status IN ('Pending', 'Approved', 'Rejected'))
 );
+GO
 
-
-
+-- =========================================================
+-- ShiftReview
+-- An admin/owner's decision on a ShiftRequest.
+-- =========================================================
 CREATE TABLE ShiftReview (
+    reviewID    INT IDENTITY(1,1) PRIMARY KEY,
+    requestID   INT NOT NULL,
+    ownerID     VARCHAR(20) NOT NULL,
+    decision    VARCHAR(20) NOT NULL,
+    feedback    VARCHAR(255),
+    reviewDate  DATETIME DEFAULT GETDATE(),
 
-    reviewID INT IDENTITY(1,1) PRIMARY KEY,
+    CONSTRAINT FK_ShiftReview_Request
+        FOREIGN KEY (requestID) REFERENCES ShiftRequest(requestID)
+        ON DELETE CASCADE,
 
-    requestID INT,
+    CONSTRAINT FK_ShiftReview_Owner
+        FOREIGN KEY (ownerID) REFERENCES Owner(username),
 
-    ownerID VARCHAR(20),
-
-    decision VARCHAR(20),
-
-    feedback VARCHAR(255),
-
-    reviewDate DATETIME DEFAULT GETDATE(),
-
-
-
-    FOREIGN KEY (requestID) REFERENCES ShiftRequest(requestID),
-
-    FOREIGN KEY (ownerID) REFERENCES Owner(username)
-
+    CONSTRAINT CK_ShiftReview_Decision
+        CHECK (decision IN ('Accepted', 'Pending', 'Rejected'))
 );
-
+GO
 
 -- =========================
 -- 11. VEHICLE LOG

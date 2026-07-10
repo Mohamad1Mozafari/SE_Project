@@ -268,9 +268,458 @@ app.post("/api/user_management/add_user", async (req, res) => {
     handleDbError(res, err);
   }
 });
-/// load _morning , night  , evening use the Today 
+// =====================================================================
+// SHIFT MANAGEMENT + SHIFT CHANGE REQUEST APIs
+// Paste this block into server.js, above app.listen(...).
+// Requires: sql, poolPromise, dayjs, toDay, handleDbError — all already
+// declared at the top of your server.js, so no new imports needed.
+// =====================================================================
 
+const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
+// ---- helpers ---------------------------------------------------------
+
+// Your frontend sometimes sends a real username, sometimes a display
+// name (e.g. ALL_OPERATORS = ["John Smith", ...]). This resolves either
+// one to the actual Operator username stored in Account/Operator.
+async function resolveOperatorUsername(identifier) {
+  if (!identifier) return null;
+  const pool = await poolPromise;
+  const result = await pool.request()
+    .input("id", sql.VarChar(50), identifier)
+    .query(`
+      SELECT a.username
+      FROM Account a
+      INNER JOIN Operator o ON o.username = a.username
+      WHERE a.username = @id OR a.full_name = @id
+    `);
+  return result.recordset[0]?.username || null;
+}
+
+// Returns the Monday..Sunday dayjs dates for "this week + offsetWeeks".
+function getWeekDates(offsetWeeks = 0) {
+  const base = dayjs().add(offsetWeeks * 7, "day");
+  const isoDay = base.day() === 0 ? 7 : base.day(); // Mon=1 ... Sun=7
+  const monday = base.subtract(isoDay - 1, "day");
+  const dates = [];
+  for (let i = 0; i < 7; i++) dates.push(monday.add(i, "day"));
+  return dates;
+}
+
+async function loadWeekSchedule(offsetWeeks) {
+  const weekDates = getWeekDates(offsetWeeks);
+  const startDate = weekDates[0].format("YYYY-MM-DD");
+  const endDate = weekDates[6].format("YYYY-MM-DD");
+
+  const pool = await poolPromise;
+  const result = await pool.request()
+    .input("start", sql.Date, startDate)
+    .input("end", sql.Date, endDate)
+    .query(`
+      SELECT sm.shiftDate, sm.shiftType, a.full_name
+      FROM ShiftManagement sm
+      INNER JOIN Account a ON a.username = sm.operatorID
+      WHERE sm.shiftDate BETWEEN @start AND @end
+        AND sm.status <> 'Cancelled'
+      ORDER BY sm.shiftDate
+    `);
+
+  const schedule = weekDates.map((d, idx) => ({
+    day: DAY_NAMES[idx],
+    date: d.format("YYYY-MM-DD"),
+    morning: [],
+    evening: [],
+    night: []
+  }));
+
+  result.recordset.forEach(row => {
+    const rowDate = dayjs(row.shiftDate).format("YYYY-MM-DD");
+    const match = schedule.find(s => s.date === rowDate);
+    if (!match) return;
+    const key = row.shiftType.toLowerCase();
+    if (match[key]) match[key].push(row.full_name);
+  });
+
+  return schedule;
+}
+
+async function loadTodayShift(shiftType) {
+  const pool = await poolPromise;
+  const result = await pool.request()
+    .input("today", sql.Date, toDay)
+    .input("shiftType", sql.VarChar(10), shiftType)
+    .query(`
+      SELECT a.full_name
+      FROM ShiftManagement sm
+      INNER JOIN Account a ON a.username = sm.operatorID
+      WHERE sm.shiftDate = @today AND sm.shiftType = @shiftType
+        AND sm.status <> 'Cancelled'
+    `);
+  return result.recordset.map(r => r.full_name);
+}
+
+// Shapes a ShiftRequest row into what ShiftChangeRequest.tsx expects:
+// { id, requestedBy, date, status, currentShift, requestedShift, reason }
+function shiftRequestSelect(whereClause) {
+  return `
+    SELECT
+      sr.requestID AS id,
+      a.full_name AS requestedBy,
+      CONVERT(varchar(10), sr.requestDate, 23) AS date,
+      sr.status AS status,
+      CONVERT(varchar(10), cur.shiftDate, 23) + ' ' + cur.shiftType AS currentShift,
+      CONVERT(varchar(10), req.shiftDate, 23) + ' ' + req.shiftType AS requestedShift,
+      sr.reason_comment AS reason
+    FROM ShiftRequest sr
+    INNER JOIN Account a ON a.username = sr.operatorusername
+    INNER JOIN ShiftManagement cur ON cur.shiftID = sr.currentShiftID
+    LEFT JOIN ShiftManagement req ON req.shiftID = sr.requestedShiftID
+    ${whereClause}
+    ORDER BY sr.requestDate DESC
+  `;
+}
+
+// =====================================================================
+// SHIFT MANAGEMENT (ShiftManagement_page.js)
+// =====================================================================
+
+app.get("/api/shift_management/Morning_shift_load", async (req, res) => {
+  try { res.json({ operators: await loadTodayShift("Morning") }); }
+  catch (err) { handleDbError(res, err); }
+});
+
+app.get("/api/shift_management/Evening_shift_load", async (req, res) => {
+  try { res.json({ operators: await loadTodayShift("Evening") }); }
+  catch (err) { handleDbError(res, err); }
+});
+
+app.get("/api/shift_management/Night_shift_load", async (req, res) => {
+  try { res.json({ operators: await loadTodayShift("Night") }); }
+  catch (err) { handleDbError(res, err); }
+});
+
+app.get("/api/shift_management/Weekly_Schedule_load", async (req, res) => {
+  try { res.json(await loadWeekSchedule(0)); }
+  catch (err) { handleDbError(res, err); }
+});
+
+app.get("/api/shift_management/Previous_Week_Schedule_load", async (req, res) => {
+  try { res.json(await loadWeekSchedule(-1)); }
+  catch (err) { handleDbError(res, err); }
+});
+
+app.get("/api/shift_management/Next_Week_Schedule_load", async (req, res) => {
+  try { res.json(await loadWeekSchedule(1)); }
+  catch (err) { handleDbError(res, err); }
+});
+
+app.get("/api/shift_management/Shift_Coverage_load", async (req, res) => {
+  try {
+    const weekDates = getWeekDates(0);
+    const startDate = weekDates[0].format("YYYY-MM-DD");
+    const endDate = weekDates[6].format("YYYY-MM-DD");
+
+    const pool = await poolPromise;
+    const result = await pool.request()
+      .input("start", sql.Date, startDate)
+      .input("end", sql.Date, endDate)
+      .query(`
+        SELECT DISTINCT shiftDate, shiftType
+        FROM ShiftManagement
+        WHERE shiftDate BETWEEN @start AND @end AND status <> 'Cancelled'
+      `);
+
+    const covered = result.recordset.length;
+    const totalSlots = 7 * 3; // 7 days x 3 shift types
+    const uncovered = Math.max(totalSlots - covered, 0);
+
+    res.json({ covered, uncovered });
+  } catch (err) { handleDbError(res, err); }
+});
+
+app.post("/api/shift_management/Create_shift", async (req, res) => {
+  try {
+    const { usernames, time, date } = req.body;
+    if (!usernames || !Array.isArray(usernames) || usernames.length === 0) {
+      return res.status(400).json({ error: "At least one operator is required" });
+    }
+    if (!["Morning", "Evening", "Night"].includes(time)) {
+      return res.status(400).json({ error: "Invalid shift type" });
+    }
+
+    const pool = await poolPromise;
+    const inserted = [];
+    const skipped = [];
+
+    for (const identifier of usernames) {
+      const username = await resolveOperatorUsername(identifier);
+      if (!username) { skipped.push(identifier); continue; }
+
+      try {
+        await pool.request()
+          .input("operatorID", sql.VarChar(20), username)
+          .input("shiftDate", sql.Date, date)
+          .input("shiftType", sql.VarChar(10), time)
+          .query(`
+            INSERT INTO ShiftManagement (operatorID, shiftDate, shiftType, status)
+            VALUES (@operatorID, @shiftDate, @shiftType, 'Scheduled')
+          `);
+        inserted.push(username);
+      } catch (e) {
+        // Most likely the UNIQUE(operatorID, shiftDate, shiftType) constraint —
+        // that operator is already scheduled for that slot.
+        skipped.push(identifier);
+      }
+    }
+
+    res.json({ success: true, inserted, skipped });
+  } catch (err) { handleDbError(res, err); }
+});
+
+// NOTE: this endpoint can only ADD an operator to a day/shift cell.
+// Your ShiftManagement_page.js only ever sends the operators that should
+// be IN the cell, one call per operator — it never tells the server who
+// was removed. So removals from a cell are not reflected in the DB with
+// the current frontend contract. If you want real "replace the whole
+// cell" behavior, Weekly_Schedule_edit would need to send the full
+// operator list for the cell in a single call instead of looping.
+app.post("/api/shift_management/Weekly_Schedule_edit", async (req, res) => {
+  try {
+    const { shift, day, username } = req.body;
+    const dayIndex = DAY_NAMES.indexOf(day);
+    if (dayIndex === -1) return res.status(400).json({ error: "Invalid day" });
+
+    const shiftType = String(shift).charAt(0).toUpperCase() + String(shift).slice(1).toLowerCase();
+    if (!["Morning", "Evening", "Night"].includes(shiftType)) {
+      return res.status(400).json({ error: "Invalid shift type" });
+    }
+
+    const shiftDate = getWeekDates(0)[dayIndex].format("YYYY-MM-DD");
+
+    const operatorUsername = await resolveOperatorUsername(username);
+    if (!operatorUsername) return res.status(404).json({ error: "Operator not found" });
+
+    const pool = await poolPromise;
+    const existing = await pool.request()
+      .input("operatorID", sql.VarChar(20), operatorUsername)
+      .input("shiftDate", sql.Date, shiftDate)
+      .input("shiftType", sql.VarChar(10), shiftType)
+      .query(`
+        SELECT shiftID FROM ShiftManagement
+        WHERE operatorID = @operatorID AND shiftDate = @shiftDate AND shiftType = @shiftType
+      `);
+
+    if (existing.recordset.length === 0) {
+      await pool.request()
+        .input("operatorID", sql.VarChar(20), operatorUsername)
+        .input("shiftDate", sql.Date, shiftDate)
+        .input("shiftType", sql.VarChar(10), shiftType)
+        .query(`
+          INSERT INTO ShiftManagement (operatorID, shiftDate, shiftType, status)
+          VALUES (@operatorID, @shiftDate, @shiftType, 'Scheduled')
+        `);
+    }
+
+    res.json("success");
+  } catch (err) {
+    console.error(err);
+    res.status(500).json("error");
+  }
+});
+
+// =====================================================================
+// SHIFT CHANGE REQUEST — operator side (ShiftChangeRequest_operator_view.js)
+// =====================================================================
+
+app.post("/api/shift_change_reuqest_operator/new_request", async (req, res) => {
+  try {
+    const { username, id_shift_current, id_shift_changeTO } = req.body;
+    const operatorUsername = await resolveOperatorUsername(username);
+    if (!operatorUsername) return res.status(404).json({ error: "Operator not found" });
+    if (!id_shift_current) return res.status(400).json({ error: "id_shift_current is required" });
+
+    const pool = await poolPromise;
+    await pool.request()
+      .input("currentShiftID", sql.Int, id_shift_current)
+      .input("requestedShiftID", sql.Int, id_shift_changeTO || null)
+      .input("operatorusername", sql.VarChar(20), operatorUsername)
+      .query(`
+        INSERT INTO ShiftRequest (currentShiftID, requestedShiftID, operatorusername, requestType, status)
+        VALUES (@currentShiftID, @requestedShiftID, @operatorusername, 'ShiftChange', 'Pending')
+      `);
+
+    res.json("success");
+  } catch (err) { handleDbError(res, err); }
+});
+
+// The operator's own upcoming scheduled shifts — used to pick "current shift" to change.
+app.post("/api/shift_change_reuqest_operator/current_sift", async (req, res) => {
+  try {
+    const operatorUsername = await resolveOperatorUsername(req.body.username);
+    if (!operatorUsername) return res.status(404).json({ error: "Operator not found" });
+
+    const pool = await poolPromise;
+    const result = await pool.request()
+      .input("operatorID", sql.VarChar(20), operatorUsername)
+      .input("today", sql.Date, toDay)
+      .query(`
+        SELECT shiftID, shiftDate, shiftType
+        FROM ShiftManagement
+        WHERE operatorID = @operatorID AND shiftDate >= @today AND status = 'Scheduled'
+        ORDER BY shiftDate, shiftType
+      `);
+
+    res.json(result.recordset);
+  } catch (err) { handleDbError(res, err); }
+});
+
+// Other operators' upcoming scheduled shifts — used to pick "requested shift" to swap into.
+app.post("/api/shift_change_reuqest_operator/requested_shift", async (req, res) => {
+  try {
+    const operatorUsername = await resolveOperatorUsername(req.body.username);
+    if (!operatorUsername) return res.status(404).json({ error: "Operator not found" });
+
+    const pool = await poolPromise;
+    const result = await pool.request()
+      .input("operatorID", sql.VarChar(20), operatorUsername)
+      .input("today", sql.Date, toDay)
+      .query(`
+        SELECT shiftID, shiftDate, shiftType
+        FROM ShiftManagement
+        WHERE operatorID <> @operatorID AND shiftDate >= @today AND status = 'Scheduled'
+        ORDER BY shiftDate, shiftType
+      `);
+
+    res.json(result.recordset);
+  } catch (err) { handleDbError(res, err); }
+});
+
+async function loadOperatorRequests(operatorUsername, status) {
+  const pool = await poolPromise;
+  const result = await pool.request()
+    .input("operatorID", sql.VarChar(20), operatorUsername)
+    .input("status", sql.VarChar(20), status)
+    .query(shiftRequestSelect("WHERE sr.operatorusername = @operatorID AND sr.status = @status"));
+  return result.recordset;
+}
+
+app.post("/api/shift_change_reuqest_operator/pending_request", async (req, res) => {
+  try {
+    const operatorUsername = await resolveOperatorUsername(req.body.username);
+    if (!operatorUsername) return res.status(404).json({ error: "Operator not found" });
+    res.json(await loadOperatorRequests(operatorUsername, "Pending"));
+  } catch (err) { handleDbError(res, err); }
+});
+
+app.post("/api/shift_change_reuqest_operator/aproved_request", async (req, res) => {
+  try {
+    const operatorUsername = await resolveOperatorUsername(req.body.username);
+    if (!operatorUsername) return res.status(404).json({ error: "Operator not found" });
+    res.json(await loadOperatorRequests(operatorUsername, "Approved"));
+  } catch (err) { handleDbError(res, err); }
+});
+
+app.post("/api/shift_change_reuqest_operator/rejected_request", async (req, res) => {
+  try {
+    const operatorUsername = await resolveOperatorUsername(req.body.username);
+    if (!operatorUsername) return res.status(404).json({ error: "Operator not found" });
+    res.json(await loadOperatorRequests(operatorUsername, "Rejected"));
+  } catch (err) { handleDbError(res, err); }
+});
+
+// =====================================================================
+// SHIFT CHANGE REQUEST — admin/owner side (ShiftChangeRequest_admin_owner_view.js)
+// =====================================================================
+
+async function loadAllRequests(status) {
+  const pool = await poolPromise;
+  const result = await pool.request()
+    .input("status", sql.VarChar(20), status)
+    .query(shiftRequestSelect("WHERE sr.status = @status"));
+  return result.recordset;
+}
+
+app.get("/api/shift_management/pending_request_all", async (req, res) => {
+  try { res.json(await loadAllRequests("Pending")); }
+  catch (err) { handleDbError(res, err); }
+});
+
+app.get("/api/shift_management/aproved_request_all", async (req, res) => {
+  try { res.json(await loadAllRequests("Approved")); }
+  catch (err) { handleDbError(res, err); }
+});
+
+app.get("/api/shift_management/rejected_request_all", async (req, res) => {
+  try { res.json(await loadAllRequests("Rejected")); }
+  catch (err) { handleDbError(res, err); }
+});
+
+// NOTE: your admin/owner view.js only sends { shiftchangerequestID } — no
+// reviewer identity. ShiftReview.ownerID is NOT NULL + FK'd to Owner, so
+// we can't safely insert a review row without knowing who reviewed it.
+// These endpoints always update ShiftRequest.status, and will ALSO log a
+// ShiftReview row IF you start sending reviewerUsername (and optionally
+// feedback) in the request body — until then, review history just isn't
+// recorded, only the status change.
+app.post("/api/shift_management/pending_request_approve_button", async (req, res) => {
+  try {
+    const { shiftchangerequestID, reviewerUsername, feedback } = req.body;
+    if (!shiftchangerequestID) return res.status(400).json({ error: "shiftchangerequestID required" });
+
+    const pool = await poolPromise;
+    const updateResult = await pool.request()
+      .input("id", sql.Int, shiftchangerequestID)
+      .query(`UPDATE ShiftRequest SET status = 'Approved' WHERE requestID = @id`);
+
+    if (updateResult.rowsAffected[0] === 0) {
+      return res.status(404).json({ error: "Request not found" });
+    }
+
+    if (reviewerUsername) {
+      await pool.request()
+        .input("requestID", sql.Int, shiftchangerequestID)
+        .input("ownerID", sql.VarChar(20), reviewerUsername)
+        .input("decision", sql.VarChar(20), "Accepted")
+        .input("feedback", sql.VarChar(255), feedback || null)
+        .query(`
+          INSERT INTO ShiftReview (requestID, ownerID, decision, feedback)
+          VALUES (@requestID, @ownerID, @decision, @feedback)
+        `);
+    }
+
+    res.json("success");
+  } catch (err) { handleDbError(res, err); }
+});
+
+app.post("/api/shift_management/pending_request_reject_button", async (req, res) => {
+  try {
+    const { shiftchangerequestID, reviewerUsername, feedback } = req.body;
+    if (!shiftchangerequestID) return res.status(400).json({ error: "shiftchangerequestID required" });
+
+    const pool = await poolPromise;
+    const updateResult = await pool.request()
+      .input("id", sql.Int, shiftchangerequestID)
+      .query(`UPDATE ShiftRequest SET status = 'Rejected' WHERE requestID = @id`);
+
+    if (updateResult.rowsAffected[0] === 0) {
+      return res.status(404).json({ error: "Request not found" });
+    }
+
+    if (reviewerUsername) {
+      await pool.request()
+        .input("requestID", sql.Int, shiftchangerequestID)
+        .input("ownerID", sql.VarChar(20), reviewerUsername)
+        .input("decision", sql.VarChar(20), "Rejected")
+        .input("feedback", sql.VarChar(255), feedback || null)
+        .query(`
+          INSERT INTO ShiftReview (requestID, ownerID, decision, feedback)
+          VALUES (@requestID, @ownerID, @decision, @feedback)
+        `);
+    }
+
+    res.json("success");
+  } catch (err) { handleDbError(res, err); }
+});
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
