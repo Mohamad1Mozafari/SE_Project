@@ -1,57 +1,114 @@
-import { ArrowRight, CheckCircle, XCircle, Clock, Plus } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { ArrowRight, CheckCircle, XCircle, Clock, Trash2 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
-import { Label } from "../components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { Textarea } from "../components/ui/textarea";
 import { get_user_name, get_role } from "./USername_role.js"; 
 
+// Import operator APIs
+import {
+  pending_request as op_pending,
+  aproved_request as op_approved,
+  rejected_request as op_rejected
+} from "./ShiftChangeRequest_operator_view.js";
+
+// Import Admin/Owner APIs
+import {
+  pending_request as admin_pending,
+  aproved_request as admin_approved,
+  rejected_request as admin_rejected,
+  pending_request_approve_button,
+  pending_request_reject_button
+} from "./ShiftChangeRequest_admin_owner_view.js";
 
 export function ShiftChangeRequest() {
-  const requests = [
-    {
-      id: 1,
-      requestedBy: "John Smith",
-      currentShift: "Morning - Monday",
-      requestedShift: "Evening - Monday",
-      reason: "Personal appointment",
-      date: "May 28, 2026",
-      status: "Pending",
-    },
-    {
-      id: 2,
-      requestedBy: "Sarah Johnson",
-      currentShift: "Evening - Wednesday",
-      requestedShift: "Morning - Wednesday",
-      reason: "Family commitment",
-      date: "May 27, 2026",
-      status: "Approved",
-    },
-    {
-      id: 3,
-      requestedBy: "Mike Brown",
-      currentShift: "Night - Friday",
-      requestedShift: "Night - Saturday",
-      reason: "Health checkup",
-      date: "May 26, 2026",
-      status: "Rejected",
-    },
-    {
-      id: 4,
-      requestedBy: "Emily Davis",
-      currentShift: "Morning - Thursday",
-      requestedShift: "Evening - Thursday",
-      reason: "Course enrollment",
-      date: "May 29, 2026",
-      status: "Pending",
-    },
-  ];
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+  const [approvedRequests, setApprovedRequests] = useState<any[]>([]);
+  const [rejectedRequests, setRejectedRequests] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const pendingRequests = requests.filter(r => r.status === "Pending");
-  const approvedRequests = requests.filter(r => r.status === "Approved");
-  const rejectedRequests = requests.filter(r => r.status === "Rejected");
+  const role = get_role();
+  const isAdminOrOwner = role === "admin" || role === "owner";
+
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+      if (isAdminOrOwner) {
+        // Load Admin/Owner Data
+        const pending = await admin_pending();
+        const approved = await admin_approved();
+        const rejected = await admin_rejected();
+        
+        setPendingRequests(pending || []);
+        setApprovedRequests(approved || []);
+        setRejectedRequests(rejected || []);
+      } else {
+        // Load Operator Data
+        const pending = await op_pending();
+        const approved = await op_approved();
+        const rejected = await op_rejected();
+
+        // Combine to find the latest request
+        const allRequests = [...(pending || []), ...(approved || []), ...(rejected || [])];
+        
+        if (allRequests.length > 0) {
+          // Sort by ID descending (assuming higher ID = newer request)
+          allRequests.sort((a, b) => b.id - a.id);
+          const latestRequest = allRequests[0];
+          
+          // Clear all states
+          setPendingRequests([]);
+          setApprovedRequests([]);
+          setRejectedRequests([]);
+
+          // Only set the state for the table that matches the latest request status
+          if (latestRequest.status === "Pending" || latestRequest.status === "pending") {
+            setPendingRequests([latestRequest]);
+          } else if (latestRequest.status === "Approved" || latestRequest.status === "approved") {
+            setApprovedRequests([latestRequest]);
+          } else {
+            setRejectedRequests([latestRequest]);
+          }
+        } else {
+          setPendingRequests([]);
+          setApprovedRequests([]);
+          setRejectedRequests([]);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load shift requests", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [role]);
+
+  // Action Handlers
+  const handleApprove = async (id: number) => {
+    await pending_request_approve_button(id);
+    loadData(); // Refresh the tables
+  };
+
+  const handleReject = async (id: number) => {
+    await pending_request_reject_button(id);
+    loadData(); // Refresh the tables
+  };
+
+  const handleOperatorDelete = async (id: number) => {
+    // TODO: Create a delete endpoint in your API and connect it here
+    console.log("Operator requested to delete request ID:", id);
+    // await delete_request_operator(id); 
+    // loadData();
+  };
+
+  if (isLoading) {
+    return <div className="p-8 text-center text-gray-500">Loading shift requests...</div>;
+  }
+
+  const totalRequests = pendingRequests.length + approvedRequests.length + rejectedRequests.length;
 
   return (
     <div className="p-8">
@@ -65,119 +122,80 @@ export function ShiftChangeRequest() {
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Shift Change Requests</h1>
-          <p className="text-gray-600 mt-1">Review and manage operator shift change requests</p>
+          <p className="text-gray-600 mt-1">
+            {isAdminOrOwner 
+              ? "Review and manage operator shift change requests" 
+              : "Track the status of your recent shift change request"}
+          </p>
         </div>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              New Request
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Submit Shift Change Request</DialogTitle>
-              <DialogDescription>Request a change to your assigned shift</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Current Shift</Label>
-                <Select>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select current shift" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="morning-mon">Morning - Monday</SelectItem>
-                    <SelectItem value="evening-mon">Evening - Monday</SelectItem>
-                    <SelectItem value="night-mon">Night - Monday</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Requested Shift</Label>
-                <Select>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select desired shift" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="morning-tue">Morning - Tuesday</SelectItem>
-                    <SelectItem value="evening-tue">Evening - Tuesday</SelectItem>
-                    <SelectItem value="night-tue">Night - Tuesday</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Reason</Label>
-                <Textarea placeholder="Please provide a reason for the shift change request" rows={4} />
-              </div>
-            </div>
-            <div className="flex justify-end gap-3">
-              <Button variant="outline">Cancel</Button>
-              <Button>Submit Request</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
       </div>
 
-      {/* Stats */}
+      {/* Stats - Rendered for both, but dynamically populated */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 mb-1">Total Requests</p>
-                <p className="text-3xl font-bold text-gray-900">{requests.length}</p>
+                <p className="text-sm text-gray-600 mb-1">{isAdminOrOwner ? "Total Requests" : "Active History"}</p>
+                <p className="text-3xl font-bold text-gray-900">{totalRequests}</p>
               </div>
               <Clock className="w-8 h-8 text-blue-600" />
             </div>
           </CardContent>
         </Card>
+        
+        {isAdminOrOwner && (
+          <>
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Pending</p>
+                    <p className="text-3xl font-bold text-orange-600">{pendingRequests.length}</p>
+                  </div>
+                  <Clock className="w-8 h-8 text-orange-600" />
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600 mb-1">Pending</p>
-                <p className="text-3xl font-bold text-orange-600">{pendingRequests.length}</p>
-              </div>
-              <Clock className="w-8 h-8 text-orange-600" />
-            </div>
-          </CardContent>
-        </Card>
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Approved</p>
+                    <p className="text-3xl font-bold text-green-600">{approvedRequests.length}</p>
+                  </div>
+                  <CheckCircle className="w-8 h-8 text-green-600" />
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600 mb-1">Approved</p>
-                <p className="text-3xl font-bold text-green-600">{approvedRequests.length}</p>
-              </div>
-              <CheckCircle className="w-8 h-8 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600 mb-1">Rejected</p>
-                <p className="text-3xl font-bold text-red-600">{rejectedRequests.length}</p>
-              </div>
-              <XCircle className="w-8 h-8 text-red-600" />
-            </div>
-          </CardContent>
-        </Card>
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Rejected</p>
+                    <p className="text-3xl font-bold text-red-600">{rejectedRequests.length}</p>
+                  </div>
+                  <XCircle className="w-8 h-8 text-red-600" />
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
 
       {/* Requests List */}
       <div className="space-y-6">
+        
         {/* Pending Requests */}
         {pendingRequests.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle>Pending Requests</CardTitle>
-              <CardDescription>Requests awaiting approval</CardDescription>
+              <CardDescription>
+                {isAdminOrOwner ? "Requests awaiting approval" : "Your request is under review"}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -210,15 +228,26 @@ export function ShiftChangeRequest() {
                       <p className="text-xs text-gray-500 mb-1">Reason</p>
                       <p className="text-sm text-gray-700">{request.reason}</p>
                     </div>
+                    
+                    {/* Role-based action buttons */}
                     <div className="flex gap-3">
-                      <Button size="sm" className="bg-green-600 hover:bg-green-700">
-                        <CheckCircle className="w-4 h-4 mr-2" />
-                        Approve
-                      </Button>
-                      <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700">
-                        <XCircle className="w-4 h-4 mr-2" />
-                        Reject
-                      </Button>
+                      {isAdminOrOwner ? (
+                        <>
+                          <Button size="sm" onClick={() => handleApprove(request.id)} className="bg-green-600 hover:bg-green-700">
+                            <CheckCircle className="w-4 h-4 mr-2" />
+                            Approve
+                          </Button>
+                          <Button size="sm" onClick={() => handleReject(request.id)} variant="outline" className="text-red-600 hover:text-red-700">
+                            <XCircle className="w-4 h-4 mr-2" />
+                            Reject
+                          </Button>
+                        </>
+                      ) : (
+                        <Button size="sm" onClick={() => handleOperatorDelete(request.id)} variant="outline" className="text-red-600 hover:text-red-700">
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete Request
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -232,7 +261,9 @@ export function ShiftChangeRequest() {
           <Card>
             <CardHeader>
               <CardTitle>Approved Requests</CardTitle>
-              <CardDescription>Recently approved shift changes</CardDescription>
+              <CardDescription>
+                {isAdminOrOwner ? "Recently approved shift changes" : "Your request was approved"}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -269,7 +300,9 @@ export function ShiftChangeRequest() {
           <Card>
             <CardHeader>
               <CardTitle>Rejected Requests</CardTitle>
-              <CardDescription>Declined shift change requests</CardDescription>
+              <CardDescription>
+                {isAdminOrOwner ? "Declined shift change requests" : "Your request was declined"}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
