@@ -1,55 +1,116 @@
-import React, { useState } from "react";
-import { ArrowRight, Clock, Plus, Calendar, X, Edit2, Check } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { ArrowRight, Clock, Plus, Calendar, X, Check } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
-// can not edit the days before today 
-// Mock list of all available operators
+import dayjs from 'dayjs';
+
+import {
+  Create_shift,
+  Morning_shift_load,
+  Evening_shift_load,
+  Night_shift_load,
+  Weekly_Schedule_load,
+  Previous_Week_Schedule_load,
+  Next_Week_Schedule_load,
+  Shift_Coverage_load,
+  Weekly_Schedule_edit
+} from './ShiftManagement_page';
+
 const ALL_OPERATORS = [
   "John Smith", "Emily Davis", "Sarah Johnson", 
   "James Wilson", "Mike Brown", "Alex Turner", "Lisa Wong"
 ];
 
-// import {Create_shift , } from 'ShiftManagement_page.js' ; 
-// import dayjs from 'dayjs';
-// const dayName = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
-// let day ; ///when we send info the ShiftManagement_page.js send data we convert that to index and then we send that 
-// let index_of_days = dayName.indexOf (day)
-// const currentDate = dayjs();
-// let toDay = currentDate.format('YYYY-MM-DD') ; 
-
+// Fallback initial schedule if API fails
 const INITIAL_SCHEDULE = [
-  { day: "Monday", morning: ["John Smith"], evening: ["Sarah Johnson"], night: ["Mike Brown"] },
-  { day: "Tuesday", morning: ["Emily Davis"], evening: ["James Wilson"], night: ["Mike Brown"] },
-  { day: "Wednesday", morning: ["John Smith", "Alex Turner"], evening: ["Sarah Johnson"], night: ["Mike Brown"] },
-  { day: "Thursday", morning: ["Emily Davis"], evening: ["James Wilson"], night: ["Mike Brown"] },
-  { day: "Friday", morning: ["John Smith"], evening: ["Sarah Johnson", "Lisa Wong"], night: ["Mike Brown"] },
-  { day: "Saturday", morning: ["Emily Davis"], evening: ["James Wilson"], night: ["Mike Brown"] },
-  { day: "Sunday", morning: ["John Smith"], evening: ["Sarah Johnson"], night: ["Mike Brown"] },
+  { day: "Monday", morning: [], evening: [], night: [] },
+  { day: "Tuesday", morning: [], evening: [], night: [] },
+  { day: "Wednesday", morning: [], evening: [], night: [] },
+  { day: "Thursday", morning: [], evening: [], night: [] },
+  { day: "Friday", morning: [], evening: [], night: [] },
+  { day: "Saturday", morning: [], evening: [], night: [] },
+  { day: "Sunday", morning: [], evening: [], night: [] },
 ];
 
 export function ShiftManagement() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   
-  // Converted schedule to state so edits reflect dynamically on the UI
   const [schedule, setSchedule] = useState(INITIAL_SCHEDULE);
+  const [coverage, setCoverage] = useState({ covered: 0, uncovered: 0 });
+  const [todayShifts, setTodayShifts] = useState({
+    morning: [],
+    evening: [],
+    night: []
+  });
 
-  // State for the cell currently being edited
   const [editingCell, setEditingCell] = useState<{
     day: string;
     shiftType: string;
     operators: string[];
   } | null>(null);
 
-  const shifts = [
-    { id: 1, name: "Morning Shift", time: "6:00 AM - 2:00 PM", operators: ["John Smith", "Emily Davis"], status: "Active" },
-    { id: 2, name: "Evening Shift", time: "2:00 PM - 10:00 PM", operators: ["Sarah Johnson", "James Wilson"], status: "Active" },
-    { id: 3, name: "Night Shift", time: "10:00 PM - 6:00 AM", operators: ["Mike Brown"], status: "Active" },
-  ];
+  // New Create Shift Modal States
+  const [newShiftDate, setNewShiftDate] = useState(dayjs().format('YYYY-MM-DD'));
+  const [newShiftTime, setNewShiftTime] = useState("Morning");
+  const [newShiftOperators, setNewShiftOperators] = useState<string[]>([]);
+
+  // Calculate standard ISO weekday (1 = Monday, 7 = Sunday) to determine if a day is in the past
+  const currentDayIndex = dayjs().day() === 0 ? 7 : dayjs().day();
+  const dayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+  const canEditDay = (dayName: string) => {
+    const rowDayIndex = dayNames.indexOf(dayName) + 1;
+    return rowDayIndex >= currentDayIndex;
+  };
+
+  useEffect(() => {
+    loadDashboardData();
+  }, []);
+
+  const loadDashboardData = async () => {
+    try {
+      // Load Today's Shifts
+      const morningRes = await Morning_shift_load();
+      const eveningRes = await Evening_shift_load();
+      const nightRes = await Night_shift_load();
+      
+      setTodayShifts({
+        morning: morningRes?.operators || [],
+        evening: eveningRes?.operators || [],
+        night: nightRes?.operators || []
+      });
+
+      // Load Weekly Schedule
+      const weeklyRes = await Weekly_Schedule_load();
+      if (weeklyRes && weeklyRes.length > 0) setSchedule(weeklyRes);
+
+      // Load Coverage Stats
+      const coverageRes = await Shift_Coverage_load();
+      if (coverageRes) setCoverage(coverageRes);
+
+    } catch (error) {
+      console.error("Error loading dashboard data", error);
+    }
+  };
+
+  const loadPreviousWeek = async () => {
+    const res = await Previous_Week_Schedule_load();
+    if (res) setSchedule(res);
+  };
+
+  const loadNextWeek = async () => {
+    const res = await Next_Week_Schedule_load();
+    if (res) setSchedule(res);
+  };
 
   const handleCellClick = (day: string, shiftType: string, operators: string[]) => {
     if (!isEditMode) return;
+    if (!canEditDay(day)) {
+      alert(`You cannot edit past schedules for ${day}.`);
+      return;
+    }
     setEditingCell({ day, shiftType, operators });
   };
 
@@ -63,13 +124,35 @@ export function ShiftManagement() {
     setEditingCell({ ...editingCell, operators: newOps });
   };
 
-  // Function to save the edited cell back to the table state
-  const handleUpdateSchedule = () => {
+  const toggleNewShiftOperator = (operator: string) => {
+    setNewShiftOperators(prev => 
+      prev.includes(operator) 
+        ? prev.filter(op => op !== operator)
+        : [...prev, operator]
+    );
+  };
+
+  const handleCreateNewShift = async () => {
+    await Create_shift(newShiftOperators, newShiftTime, newShiftDate);
+    setIsCreateModalOpen(false);
+    loadDashboardData(); // Refresh UI
+  };
+
+  const handleUpdateSchedule = async () => {
     if (!editingCell) return;
     
+    // Prepare API JSON Format
+    const jsonPayload = editingCell.operators.map(op => ({
+      username: op,
+      day: editingCell.day,
+      shift: editingCell.shiftType.toLowerCase().split(" ")[0] // extracts 'morning', 'evening', etc.
+    }));
+
+    await Weekly_Schedule_edit(JSON.stringify(jsonPayload));
+
+    // Optimistic UI Update
     setSchedule(prevSchedule => prevSchedule.map(row => {
       if (row.day === editingCell.day) {
-        // Determine which column we are updating based on the shiftType string
         if (editingCell.shiftType.includes("Morning")) return { ...row, morning: editingCell.operators };
         if (editingCell.shiftType.includes("Evening")) return { ...row, evening: editingCell.operators };
         if (editingCell.shiftType.includes("Night")) return { ...row, night: editingCell.operators };
@@ -80,12 +163,14 @@ export function ShiftManagement() {
     setEditingCell(null);
   };
 
-  // Get today's date in YYYY-MM-DD format for the default input value
-  const todayDate = new Date().toISOString().split('T')[0];
+  const shifts = [
+    { id: 1, name: "Today's Morning Shift", time: "6:00 AM - 2:00 PM", operators: todayShifts.morning, status: "Active" },
+    { id: 2, name: "Today's Evening Shift", time: "2:00 PM - 10:00 PM", operators: todayShifts.evening, status: "Active" },
+    { id: 3, name: "Today's Night Shift", time: "10:00 PM - 6:00 AM", operators: todayShifts.night, status: "Active" },
+  ];
 
   return (
     <div className="p-8 relative">
-      {/* Breadcrumb Navigation */}
       <div className="flex items-center gap-2 text-sm text-gray-600 mb-6">
         <span>Dashboard</span>
         <ArrowRight className="w-4 h-4" />
@@ -103,7 +188,7 @@ export function ShiftManagement() {
         </Button>
       </div>
 
-      {/* Shift Types */}
+      {/* Today's Shifts */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         {shifts.map((shift) => (
           <Card key={shift.id}>
@@ -119,11 +204,13 @@ export function ShiftManagement() {
               <div className="space-y-2">
                 <p className="text-sm font-medium text-gray-700">Assigned Operators:</p>
                 <div className="space-y-1">
-                  {shift.operators.map((operator, index) => (
+                  {shift.operators.length > 0 ? shift.operators.map((operator, index) => (
                     <div key={index} className="text-sm bg-gray-50 p-2 rounded">
                       {operator}
                     </div>
-                  ))}
+                  )) : (
+                    <span className="text-sm text-gray-400 italic">No operators assigned</span>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -152,7 +239,7 @@ export function ShiftManagement() {
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full border-collapse">
               <thead>
                 <tr className="border-b">
                   <th className="text-left py-3 px-4 font-medium text-gray-900 w-1/4">Day</th>
@@ -162,78 +249,81 @@ export function ShiftManagement() {
                 </tr>
               </thead>
               <tbody>
-                {schedule.map((row, index) => (
-                  <tr key={index} className="border-b hover:bg-gray-50 transition-colors align-top">
-                    <td className="py-4 px-4 font-medium text-gray-900">{row.day}</td>
-                    
-                    {/* Morning Cell */}
-                    <td 
-                      className={`py-3 px-4 h-full ${isEditMode ? 'cursor-pointer hover:bg-blue-50 border-2 border-transparent hover:border-blue-200 rounded-md transition-all' : ''}`}
-                      onClick={() => handleCellClick(row.day, "Morning (6AM-2PM)", row.morning)}
-                    >
-                      {/* Flex-col used here to stack items vertically */}
-                      <div className="flex flex-col gap-1.5 items-start">
-                        {row.morning.map((op, i) => (
-                          <div key={i} className="bg-blue-50 text-blue-700 px-3 py-1.5 rounded text-sm w-full">
-                            {op}
-                          </div>
-                        ))}
-                        {isEditMode && (
-                          <div className="w-full flex justify-center py-1 border-2 border-dashed border-gray-300 rounded text-gray-400 hover:border-blue-400 hover:text-blue-500">
-                            <Plus className="w-4 h-4" />
-                          </div>
-                        )}
-                      </div>
-                    </td>
+                {schedule.map((row, index) => {
+                  const isPast = !canEditDay(row.day);
+                  return (
+                    <tr key={index} className={`border-b transition-colors align-top ${isPast && isEditMode ? 'bg-gray-100 opacity-70' : 'hover:bg-gray-50'}`}>
+                      <td className="py-4 px-4 font-medium text-gray-900">
+                        {row.day}
+                        {isPast && isEditMode && <span className="ml-2 text-xs text-red-500">(Past)</span>}
+                      </td>
+                      
+                      {/* Morning Cell */}
+                      <td 
+                        className={`py-3 px-4 h-full ${isEditMode && !isPast ? 'cursor-pointer hover:bg-blue-50 border-2 border-transparent hover:border-blue-200 rounded-md transition-all' : (isEditMode && isPast ? 'cursor-not-allowed' : '')}`}
+                        onClick={() => handleCellClick(row.day, "Morning (6AM-2PM)", row.morning)}
+                      >
+                        <div className="flex flex-col gap-1.5 items-start">
+                          {row.morning.map((op, i) => (
+                            <div key={i} className="bg-blue-50 text-blue-700 px-3 py-1.5 rounded text-sm w-full">
+                              {op}
+                            </div>
+                          ))}
+                          {isEditMode && !isPast && (
+                            <div className="w-full flex justify-center py-1 border-2 border-dashed border-gray-300 rounded text-gray-400 hover:border-blue-400 hover:text-blue-500">
+                              <Plus className="w-4 h-4" />
+                            </div>
+                          )}
+                        </div>
+                      </td>
 
-                    {/* Evening Cell */}
-                    <td 
-                      className={`py-3 px-4 h-full ${isEditMode ? 'cursor-pointer hover:bg-orange-50 border-2 border-transparent hover:border-orange-200 rounded-md transition-all' : ''}`}
-                      onClick={() => handleCellClick(row.day, "Evening (2PM-10PM)", row.evening)}
-                    >
-                      {/* Flex-col used here to stack items vertically */}
-                      <div className="flex flex-col gap-1.5 items-start">
-                        {row.evening.map((op, i) => (
-                          <div key={i} className="bg-orange-50 text-orange-700 px-3 py-1.5 rounded text-sm w-full">
-                            {op}
-                          </div>
-                        ))}
-                        {isEditMode && (
-                          <div className="w-full flex justify-center py-1 border-2 border-dashed border-gray-300 rounded text-gray-400 hover:border-orange-400 hover:text-orange-500">
-                            <Plus className="w-4 h-4" />
-                          </div>
-                        )}
-                      </div>
-                    </td>
+                      {/* Evening Cell */}
+                      <td 
+                        className={`py-3 px-4 h-full ${isEditMode && !isPast ? 'cursor-pointer hover:bg-orange-50 border-2 border-transparent hover:border-orange-200 rounded-md transition-all' : (isEditMode && isPast ? 'cursor-not-allowed' : '')}`}
+                        onClick={() => handleCellClick(row.day, "Evening (2PM-10PM)", row.evening)}
+                      >
+                        <div className="flex flex-col gap-1.5 items-start">
+                          {row.evening.map((op, i) => (
+                            <div key={i} className="bg-orange-50 text-orange-700 px-3 py-1.5 rounded text-sm w-full">
+                              {op}
+                            </div>
+                          ))}
+                          {isEditMode && !isPast && (
+                            <div className="w-full flex justify-center py-1 border-2 border-dashed border-gray-300 rounded text-gray-400 hover:border-orange-400 hover:text-orange-500">
+                              <Plus className="w-4 h-4" />
+                            </div>
+                          )}
+                        </div>
+                      </td>
 
-                    {/* Night Cell */}
-                    <td 
-                      className={`py-3 px-4 h-full ${isEditMode ? 'cursor-pointer hover:bg-purple-50 border-2 border-transparent hover:border-purple-200 rounded-md transition-all' : ''}`}
-                      onClick={() => handleCellClick(row.day, "Night (10PM-6AM)", row.night)}
-                    >
-                      {/* Flex-col used here to stack items vertically */}
-                      <div className="flex flex-col gap-1.5 items-start">
-                        {row.night.map((op, i) => (
-                          <div key={i} className="bg-purple-50 text-purple-700 px-3 py-1.5 rounded text-sm w-full">
-                            {op}
-                          </div>
-                        ))}
-                        {isEditMode && (
-                          <div className="w-full flex justify-center py-1 border-2 border-dashed border-gray-300 rounded text-gray-400 hover:border-purple-400 hover:text-purple-500">
-                            <Plus className="w-4 h-4" />
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      {/* Night Cell */}
+                      <td 
+                        className={`py-3 px-4 h-full ${isEditMode && !isPast ? 'cursor-pointer hover:bg-purple-50 border-2 border-transparent hover:border-purple-200 rounded-md transition-all' : (isEditMode && isPast ? 'cursor-not-allowed' : '')}`}
+                        onClick={() => handleCellClick(row.day, "Night (10PM-6AM)", row.night)}
+                      >
+                        <div className="flex flex-col gap-1.5 items-start">
+                          {row.night.map((op, i) => (
+                            <div key={i} className="bg-purple-50 text-purple-700 px-3 py-1.5 rounded text-sm w-full">
+                              {op}
+                            </div>
+                          ))}
+                          {isEditMode && !isPast && (
+                            <div className="w-full flex justify-center py-1 border-2 border-dashed border-gray-300 rounded text-gray-400 hover:border-purple-400 hover:text-purple-500">
+                              <Plus className="w-4 h-4" />
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </CardContent>
       </Card>
 
-      {/* Restored Bottom Cards Section */}
+      {/* Bottom Cards Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
         <Card>
           <CardHeader>
@@ -242,44 +332,35 @@ export function ShiftManagement() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Fully Covered Shifts</span>
-              <span className="text-lg font-semibold text-green-600">21/21</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Partially Covered</span>
-              <span className="text-lg font-semibold text-orange-600">0/21</span>
+              <span className="text-sm text-gray-600">Covered Shifts</span>
+              <span className="text-lg font-semibold text-green-600">{coverage.covered}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-600">Uncovered Shifts</span>
-              <span className="text-lg font-semibold text-red-600">0/21</span>
+              <span className="text-lg font-semibold text-red-600">{coverage.uncovered}</span>
             </div>
             <div className="pt-4 border-t">
               <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-gray-700">Coverage Rate</span>
-                <span className="text-xl font-bold text-green-600">100%</span>
+                <span className="text-sm font-medium text-gray-700">Total Shifts</span>
+                <span className="text-xl font-bold text-gray-900">{coverage.covered + coverage.uncovered}</span>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* The Quick Actions card contains the View Next Week Schedule button */}
         <Card>
           <CardHeader>
             <CardTitle>Quick Actions</CardTitle>
-            <CardDescription>Common shift management tasks</CardDescription>
+            <CardDescription>Schedule navigation</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Button variant="outline" className="w-full justify-start">
-              <Calendar className="w-4 h-4 mr-2" />
-              View Next Week Schedule
+            <Button variant="outline" className="w-full justify-start" onClick={loadPreviousWeek}>
+              <ArrowRight className="w-4 h-4 mr-2 rotate-180" />
+              View Previous Week Schedule
             </Button>
-            <Button variant="outline" className="w-full justify-start">
-              <Clock className="w-4 h-4 mr-2" />
-              Create Shift Template
-            </Button>
-            <Button variant="outline" className="w-full justify-start">
+            <Button variant="outline" className="w-full justify-start" onClick={loadNextWeek}>
               <ArrowRight className="w-4 h-4 mr-2" />
-              View Shift Change Requests
+              View Next Week Schedule
             </Button>
           </CardContent>
         </Card>
@@ -287,7 +368,6 @@ export function ShiftManagement() {
 
       {/* --- MODALS --- */}
 
-      {/* Create Shift Modal */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <Card className="w-full max-w-md shadow-xl">
@@ -300,20 +380,24 @@ export function ShiftManagement() {
             <CardContent className="pt-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                {/* Default value set to today */}
                 <input 
                   type="date" 
                   className="w-full border rounded-md p-2 text-sm" 
-                  defaultValue={todayDate} 
+                  value={newShiftDate}
+                  onChange={(e) => setNewShiftDate(e.target.value)}
                 />
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Shift Time</label>
-                <select className="w-full border rounded-md p-2 text-sm bg-white">
-                  <option>Morning (6:00 AM - 2:00 PM)</option>
-                  <option>Evening (2:00 PM - 10:00 PM)</option>
-                  <option>Night (10:00 PM - 6:00 AM)</option>
+                <select 
+                  className="w-full border rounded-md p-2 text-sm bg-white"
+                  value={newShiftTime}
+                  onChange={(e) => setNewShiftTime(e.target.value)}
+                >
+                  <option value="Morning">Morning (6:00 AM - 2:00 PM)</option>
+                  <option value="Evening">Evening (2:00 PM - 10:00 PM)</option>
+                  <option value="Night">Night (10:00 PM - 6:00 AM)</option>
                 </select>
               </div>
 
@@ -322,14 +406,19 @@ export function ShiftManagement() {
                 <div className="max-h-40 overflow-y-auto border rounded-md p-2 space-y-2">
                   {ALL_OPERATORS.map((op) => (
                     <label key={op} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
-                      <input type="checkbox" className="rounded border-gray-300" />
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-gray-300"
+                        checked={newShiftOperators.includes(op)}
+                        onChange={() => toggleNewShiftOperator(op)}
+                      />
                       <span className="text-sm text-gray-700">{op}</span>
                     </label>
                   ))}
                 </div>
               </div>
 
-              <Button className="w-full mt-4" onClick={() => setIsCreateModalOpen(false)}>
+              <Button className="w-full mt-4" onClick={handleCreateNewShift}>
                 Save Shift Assignment
               </Button>
             </CardContent>
@@ -337,7 +426,6 @@ export function ShiftManagement() {
         </div>
       )}
 
-      {/* Edit Cell Modal */}
       {editingCell && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <Card className="w-full max-w-sm shadow-xl">
