@@ -307,16 +307,30 @@ app.get("/api/parking_status", async (req, res) => {
 
 app.get("/api/getTariffs", async (req, res) => {
   try {
-    // ->AHMAD: connect this to database and optionally make it follow the ui style:
-    // {id, type, }
+    const pool = await poolPromise;
+    const result = await pool.request().query(`
+      SELECT TOP 1 entrance_fee, hourly_fee
+      FROM CostPolicy
+      ORDER BY costID DESC
+    `);
+    const row = result.recordset[0];
     const tariffs = [
-      { id: 1, type: "Entrance fee", rate: 80.00, description: "First hour entrance" },
-      { id: 2, type: "Hourly", rate: 40.00, description: "Houtly fee after the first hour" },
-    ]
+      {
+        id: 1,
+        type: "Entrance fee",
+        rate: row.entrance_fee,
+        description: "First hour entrance"
+      },
+      {
+        id: 2,
+        type: "Hourly",
+        rate: row.hourly_fee,
+        description: "Hourly fee after the first hour"
+      }
+    ];
     res.json(tariffs);
   }
   catch (err) {
-    console.log("caused err from getTariffs...");
     handleDbError(res, err);
   }
 });
@@ -330,22 +344,26 @@ app.post("/api/updateTariff", async (req, res) => {
   }
 
   try {
+    const pool = await poolPromise;
+    const affected_tariff = 
+      id === 1 
+        ? "entrance_fee" 
+        : "hourly_fee";
+    await pool.request()
+      .input("rate", sql.Money, rate)
+      .query(`
+        UPDATE CostPolicy
+        SET ${affected_tariff} = @rate
+      `); // TODO: this command may be susceptible to SQL-injection. Fix later
     res.json({
       success: true,
       message: "Tariff updated."
     });
   }
   catch (err) {
-    console.log("Caused err from updateTariff");
     handleDbError(res, err);
   }
 });
-
-/* FATAL: server.js crashes on every request. The output indicates:
-```
-can not connect to the Database! Failed to connect to .:1433 - getaddrinfo EAI_AGAIN .
-```
-*/
 
 app.listen(PORT, () => {
   console.log(`Backend server is running on http://localhost:${PORT}`);
