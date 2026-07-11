@@ -560,42 +560,35 @@ app.post("/api/shift_change_reuqest_operator/current_sift", async (req, res) => 
 
 // select the operatros in the 
 // SELECT the requested shifts available in the next 7 days
-app.post("/api/shift_change_request_operator/current_sift", async (req, res) => {
+app.post("/api/shift_change_reuqest_operator/requested_shift", async (req, res) => {
   try {
     const operatorUsername = await resolveOperatorUsername(req.body.username);
     if (!operatorUsername) return res.status(404).json({ error: "Operator not found" });
 
-    const toDay = new Date();
-    toDay.setHours(0, 0, 0, 0);
+    // FIX 1: Define the current date to prevent ReferenceError
+    const toDay = new Date(); 
 
     const pool = await poolPromise;
     const result = await pool.request()
       .input("operatorID", sql.VarChar(20), operatorUsername)
       .input("today", sql.Date, toDay)
       .query(`
-        SELECT 
-          shiftID as id,  -- Rename to 'id' for frontend
-          shiftDate,
-          shiftType,
-          status,
-          -- Create a display name field
-          CONCAT('Shift ', shiftType, ' - ', FORMAT(shiftDate, 'yyyy-MM-dd')) as shift_name
+        SELECT shiftID, shiftDate, shiftType, status, operatorID
         FROM ShiftManagement
         WHERE 
-          operatorID = @operatorID 
-          AND shiftDate >= @today 
-          AND status = 'Scheduled'
-          AND NOT EXISTS (
-            SELECT 1 FROM ShiftRequest sr 
-            WHERE sr.currentShiftID = ShiftManagement.shiftID 
-              AND sr.status = 'Pending'
-          )
+            -- FIX 2 & 3: Find shifts with NO operator (free) 
+            operatorID IS NULL 
+            -- Find shifts from today up to 7 days from now
+            AND shiftDate >= @today 
+            AND shiftDate <= DATEADD(day, 7, @today)
+            -- Ensure the shift is still valid
+            AND status <> 'Cancelled'
         ORDER BY shiftDate, shiftType
       `);
 
     res.json(result.recordset);
   } catch (err) { 
-    handleDbError(res, err); 
+      handleDbError(res, err); 
   }
 });
 
