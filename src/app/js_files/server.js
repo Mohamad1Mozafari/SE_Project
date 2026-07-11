@@ -558,7 +558,7 @@ app.post("/api/shift_change_reuqest_operator/current_sift", async (req, res) => 
   } catch (err) { handleDbError(res, err); }
 });
 
-// Other operators' upcoming scheduled shifts — used to pick "requested shift" to swap into.
+// select the operatros in the 
 app.post("/api/shift_change_reuqest_operator/requested_shift", async (req, res) => {
   try {
     const operatorUsername = await resolveOperatorUsername(req.body.username);
@@ -706,6 +706,8 @@ app.post("/api/shift_management/pending_request_reject_button", async (req, res)
     res.json("success");
   } catch (err) { handleDbError(res, err); }
 });
+
+
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
