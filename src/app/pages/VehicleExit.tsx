@@ -104,7 +104,7 @@ export function VehicleExit() {
               <div className="flex gap-3">
                 <div className="flex-1">
                   <Input
-                    placeholder="e.g., 12B345-51"
+                    placeholder="e.g., 12-B-345-51"
                     value={searchPlate}
                     maxLength={11}
                     onChange={(e) => setSearchPlate(e.target.value.toUpperCase())}

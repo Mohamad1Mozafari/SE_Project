@@ -71,31 +71,33 @@ Example:
 ![How to do global search in vscode](/images/guidelines/attention_comments.png)
 
 Optionally we can also write who directs who in the comment:
-```javascript
-// OMID->AHMAD: need to implement DB API for getting tariffs
-```
+
+  ```javascript
+  // OMID->AHMAD: need to implement DB API for getting tariffs
+  ```
 
 ## Marking fatal erros & bugs
 
 If a certain part of the program is susceptible to a bug, **we can write a comment which starts with BUG**.
 Example:
 
-```javascript
-// BUG: value for rate accepts less than zero
-```
+  ```javascript
+  // BUG: value for rate accepts less than zero
+  ```
 
 If there is a fatal error in the project, **we mark it by writing a comment which starts with FATAL**.
 Example:
-```javascript
-/* FATAL: server.js crashes on every request. The output indicates:
-'''
-can not connect to the Database! Failed to connect to .:1433 - getaddrinfo EAI_AGAIN .
-'''
-*/
-app.listen(PORT, () => {
-  console.log(`Backend server is running on http://localhost:${PORT}`);
-});
-```
+
+  ```javascript
+  /* FATAL: server.js crashes on every request. The output indicates:
+  '''
+  can not connect to the Database! Failed to connect to .:1433 - getaddrinfo EAI_AGAIN .
+  '''
+  */
+  app.listen(PORT, () => {
+    console.log(`Backend server is running on http://localhost:${PORT}`);
+  });
+  ```
 
 ## Marking items to be done or checked later
 
