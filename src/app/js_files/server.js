@@ -183,6 +183,30 @@ app.get("/api/dashboard/stats", async (req, res) => {
 });
 
 
+// GET the 10 most recent entries/exits (uses the existing VIEW_RecentActivity view)
+app.get("/api/dashboard/recent_activity", async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request().query(`
+      SELECT TOP 10 plate_number, action, event_time, spot
+      FROM VIEW_RecentActivity
+      ORDER BY event_time DESC
+    `);
+
+    res.json(
+      result.recordset.map((r) => ({
+        plate_number: r.plate_number ? r.plate_number.trim() : null,
+        action: r.action,
+        event_time: r.event_time,
+        spot: r.spot ? r.spot.trim() : null,
+      }))
+    );
+  } catch (err) {
+    handleDbError(res, err);
+  }
+});
+
+
 
 // 3. EDIT USER (Fixed transaction error throwing and tracking)
 // 3. EDIT USER (Fixed parameter mismatch and role mapping variables)
@@ -566,29 +590,6 @@ app.post("/api/shift_management/Weekly_Schedule_edit", async (req, res) => {
   }
 });
 
-// GET the 10 most recent entries/exits (uses the existing VIEW_RecentActivity view)
-app.get("/api/dashboard/recent_activity", async (req, res) => {
-  try {
-    const pool = await poolPromise;
-    const result = await pool.request().query(`
-      SELECT TOP 10 plate_number, action, event_time, spot
-      FROM VIEW_RecentActivity
-      ORDER BY event_time DESC
-    `);
-
-    res.json(
-      result.recordset.map((r) => ({
-        plate_number: r.plate_number ? r.plate_number.trim() : null,
-        action: r.action,
-        event_time: r.event_time,
-        spot: r.spot ? r.spot.trim() : null,
-      }))
-    );
-  } catch (err) {
-    handleDbError(res, err);
-  }
-});
-
 
 
 
@@ -717,7 +718,7 @@ app.get("/api/vehicle/:plate_number", async (req, res) => {
     const entranceTime = new Date(vehicle.entrance_time);
     const now = new Date();
     const durationMinutes = Math.round((now - entranceTime) / 60000);
-    const durationHours = Math.ceil(durationMinutes / 60);
+    const durationHours = Math.max( 1, Math.ceil((now - entranceTime) / (1000 * 60 * 60)) );
     const estimatedFee = Number(entranceFee) + (durationHours - 1) * Number(hourlyFee);
 
     res.json({
