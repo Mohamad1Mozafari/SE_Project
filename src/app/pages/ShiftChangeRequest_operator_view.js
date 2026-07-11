@@ -28,7 +28,8 @@ export async function requested_shift_load() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username })
   });
-  return await response.json();
+  const data = await response.json();
+  return data || []; // Return empty array if null/undefined
 }
 
 export async function pending_request() {

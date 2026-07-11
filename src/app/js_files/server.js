@@ -559,25 +559,44 @@ app.post("/api/shift_change_reuqest_operator/current_sift", async (req, res) => 
 });
 
 // select the operatros in the 
-app.post("/api/shift_change_reuqest_operator/requested_shift", async (req, res) => {
+// SELECT the requested shifts available in the next 7 days
+app.post("/api/shift_change_request_operator/current_sift", async (req, res) => {
   try {
     const operatorUsername = await resolveOperatorUsername(req.body.username);
     if (!operatorUsername) return res.status(404).json({ error: "Operator not found" });
+
+    const toDay = new Date();
+    toDay.setHours(0, 0, 0, 0);
 
     const pool = await poolPromise;
     const result = await pool.request()
       .input("operatorID", sql.VarChar(20), operatorUsername)
       .input("today", sql.Date, toDay)
       .query(`
-        SELECT shiftID, shiftDate, shiftType
+        SELECT 
+          shiftID as id,  -- Rename to 'id' for frontend
+          shiftDate,
+          shiftType,
+          status,
+          -- Create a display name field
+          CONCAT('Shift ', shiftType, ' - ', FORMAT(shiftDate, 'yyyy-MM-dd')) as shift_name
         FROM ShiftManagement
-        WHERE operatorID <> @operatorID AND shiftDate >= @today AND status <> 'Scheduled' 
+        WHERE 
+          operatorID = @operatorID 
+          AND shiftDate >= @today 
+          AND status = 'Scheduled'
+          AND NOT EXISTS (
+            SELECT 1 FROM ShiftRequest sr 
+            WHERE sr.currentShiftID = ShiftManagement.shiftID 
+              AND sr.status = 'Pending'
+          )
         ORDER BY shiftDate, shiftType
-      `);// WHERE operatorID == @operatorID AND shiftDate >= @today AND status <> 'Scheduled'  this for part  find the shift not for operators and not shedual for another user 
-      // and also it must find the free shifts not covered and free in next 7 day of that date 
+      `);
 
     res.json(result.recordset);
-  } catch (err) { handleDbError(res, err); }
+  } catch (err) { 
+    handleDbError(res, err); 
+  }
 });
 
 async function loadOperatorRequests(operatorUsername, status) {

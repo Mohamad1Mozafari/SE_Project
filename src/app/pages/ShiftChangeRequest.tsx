@@ -190,35 +190,35 @@ export function ShiftChangeRequest() {
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label>Current Shift</Label>
-                  <Select value={selectedCurrentShift} onValueChange={setSelectedCurrentShift}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select current shift" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {currentShiftsOptions.map((shift) => (
-                        <SelectItem key={shift.id} value={String(shift.id)}>
-                          {shift.shift_name || `Shift ID: ${shift.id}`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Requested Shift</Label>
-                  <Select value={selectedRequestedShift} onValueChange={setSelectedRequestedShift}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select desired shift" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {requestedShiftsOptions.map((shift) => (
-                        <SelectItem key={shift.id} value={String(shift.id)}>
-                          {shift.shift_name || `Shift ID: ${shift.id}`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+  <Label>Current Shift</Label>
+  <Select value={selectedCurrentShift} onValueChange={setSelectedCurrentShift}>
+    <SelectTrigger>
+      <SelectValue placeholder="Select current shift" />
+    </SelectTrigger>
+    <SelectContent>
+      {currentShiftsOptions.map((shift) => (
+        <SelectItem key={shift.shiftID} value={String(shift.shiftID)}>
+          {new Date(shift.shiftDate).toLocaleDateString()} — {shift.shiftType}
+        </SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
+</div>
+<div className="space-y-2">
+  <Label>Requested Shift</Label>
+  <Select value={selectedRequestedShift} onValueChange={setSelectedRequestedShift}>
+    <SelectTrigger>
+      <SelectValue placeholder="Select desired shift" />
+    </SelectTrigger>
+    <SelectContent>
+      {requestedShiftsOptions.map((shift) => (
+        <SelectItem key={shift.shiftID} value={String(shift.shiftID)}>
+          {new Date(shift.shiftDate).toLocaleDateString()} — {shift.shiftType}
+        </SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
+</div>
               </div>
               <div className="flex justify-end gap-3">
                 <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
