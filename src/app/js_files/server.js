@@ -1,8 +1,11 @@
 //server.js
-import { sql, poolPromise } from "./db.js";
-import express from 'express' ;
-import cors from "cors"; 
-import dayjs from 'dayjs';
+// import { sql, poolPromise } from "./db.js";
+// import express from 'express' ;
+// import cors from "cors"; 
+// import dayjs from 'dayjs';
+const express = require("express");
+const cors = require("cors");
+const { sql, poolPromise } = require("./db");
 const currentDate = dayjs();
 let toDay = currentDate.format('YYYY-MM-DD') ; 
 
