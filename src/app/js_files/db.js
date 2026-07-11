@@ -12,7 +12,8 @@ const config = {
 
     options:{
         encrypt:false,
-        trustServerCertificate:true
+        trustServerCertificate:true,
+        useUTC: false,
     },
 
     port:1433

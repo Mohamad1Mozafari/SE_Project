@@ -2,7 +2,7 @@
 // import { sql, poolPromise } from "./db.js";
 // import express from 'express' ;
 // import cors from "cors"; 
-import dayjs from 'dayjs';
+const dayjs = require('dayjs');
 const express = require("express");
 const cors = require("cors");
 const { sql, poolPromise } = require("./db");
@@ -718,7 +718,7 @@ app.get("/api/vehicle/:plate_number", async (req, res) => {
     const now = new Date();
     const durationMinutes = Math.round((now - entranceTime) / 60000);
     const durationHours = Math.ceil(durationMinutes / 60);
-    const estimatedFee = Number(entranceFee) + durationHours * Number(hourlyFee);
+    const estimatedFee = Number(entranceFee) + (durationHours - 1) * Number(hourlyFee);
 
     res.json({
       plate_number: vehicle.plate_number,
