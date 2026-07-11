@@ -66,50 +66,80 @@ app.get("/api/parking-status", async (req, res) => {
   }
 });
 
-// General statistics of Dashboard (Dashboard.tsx)
-app.get("/api/dashboard-stats", async (req, res) => {
+
+
+// * Dashboard (Dashboard.tsx) *
+
+// GET summary statistics for the dashboard stat cards
+app.get("/api/dashboard/stats", async (req, res) => {
   try {
     const pool = await poolPromise;
-                                                    // Total Parking Capacity
-    const capacityResult = await pool.request().query("SELECT COUNT(*) AS total FROM Spot;");
-    const occupiedResult = await pool
-      .request()
-      // Occupied Vehicles Count
-      .query("SELECT COUNT(*) AS occupied FROM Vehicle WHERE location IS NOT NULL;");
-      // Today's Revenue calculation
-    const revenueResult = await pool.request().query(`
-      SELECT ISNULL(SUM(cost_paid), 0) AS todayRevenue
-      FROM LogVehicle
-      WHERE CAST(exit_time AS DATE) = CAST(GETDATE() AS DATE);
+    const result = await pool.request().query(`
+      DECLARE @today DATE = CAST(GETDATE() AS DATE);
+      DECLARE @yesterday DATE = CAST(DATEADD(DAY, -1, GETDATE()) AS DATE);
+
+      SELECT
+        (SELECT COUNT(*) FROM Spot) AS total_capacity,
+        (SELECT COUNT(*) FROM Vehicle) AS occupied_spaces,
+        (
+          (SELECT COUNT(*) FROM Vehicle WHERE CAST(entrance_time AS DATE) = @today)
+          +
+          (SELECT COUNT(*) FROM LogVehicle WHERE CAST(entrance_time AS DATE) = @today)
+        ) AS entries_today,
+        (SELECT COUNT(*) FROM LogVehicle WHERE CAST(exit_time AS DATE) = @today) AS exits_today,
+        (SELECT ISNULL(SUM(cost_paid), 0) FROM LogVehicle WHERE CAST(exit_time AS DATE) = @today) AS todays_revenue,
+        (SELECT ISNULL(SUM(cost_paid), 0) FROM LogVehicle WHERE CAST(exit_time AS DATE) = @yesterday) AS yesterdays_revenue
     `);
 
-    const totalCapacity = capacityResult.recordset[0].total;
-    const occupied = occupiedResult.recordset[0].occupied;
+    const row = result.recordset[0];
+    const totalCapacity = row.total_capacity;
+    const occupiedSpaces = row.occupied_spaces;
+    const entriesToday = row.entries_today;
+    const exitsToday = row.exits_today;
+    const todaysRevenue = Number(row.todays_revenue);
+    const yesterdaysRevenue = Number(row.yesterdays_revenue);
+
+    let revenueTrendPct = null;
+    if (yesterdaysRevenue > 0) {
+      revenueTrendPct = Math.round(((todaysRevenue - yesterdaysRevenue) / yesterdaysRevenue) * 100);
+    }
 
     res.json({
-      totalCapacity,
-      occupied,
-      available: totalCapacity - occupied,
-      todayRevenue: revenueResult.recordset[0].todayRevenue,
+      total_capacity: totalCapacity,
+      occupied_spaces: occupiedSpaces,
+      available_spaces: totalCapacity - occupiedSpaces,
+      net_change_today: entriesToday - exitsToday,
+      todays_revenue: todaysRevenue,
+      revenue_trend_pct: revenueTrendPct,
     });
   } catch (err) {
     handleDbError(res, err);
   }
 });
 
-// Recent Entry/Exit Activity of Vehicles (Dashboard.tsx)
-app.get("/api/recent-activity", async (req, res) => {
+// GET the 10 most recent entries/exits (uses the existing VIEW_RecentActivity view)
+app.get("/api/dashboard/recent_activity", async (req, res) => {
   try {
     const pool = await poolPromise;
     const result = await pool.request().query(`
-      SELECT TOP 10 * FROM VIEW_RecentActivity
-      ORDER BY event_time DESC;
+      SELECT TOP 10 plate_number, action, event_time, spot
+      FROM VIEW_RecentActivity
+      ORDER BY event_time DESC
     `);
-    res.json(result.recordset);
+
+    res.json(
+      result.recordset.map((r) => ({
+        plate_number: r.plate_number ? r.plate_number.trim() : null,
+        action: r.action,
+        event_time: r.event_time,
+        spot: r.spot ? r.spot.trim() : null,
+      }))
+    );
   } catch (err) {
     handleDbError(res, err);
   }
 });
+
 
 
 
