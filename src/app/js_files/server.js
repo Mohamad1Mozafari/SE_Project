@@ -1102,6 +1102,205 @@ app.post("/api/updateTariff", async (req, res) => {
 });
 
 
+
+// * Reports (Reports.tsx) *
+
+// date range helpers
+function resolveDateRange(period, startParam, endParam) {
+  const now = new Date();
+  const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+  const endOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+
+  switch (period) {
+    case "today":
+      return { start: startOfDay(now), end: endOfDay(now) };
+    case "yesterday": {
+      const y = new Date(now);
+      y.setDate(y.getDate() - 1);
+      return { start: startOfDay(y), end: endOfDay(y) };
+    }
+    case "this-week": {
+      const start = new Date(now);
+      start.setDate(now.getDate() - now.getDay());
+      return { start: startOfDay(start), end: endOfDay(now) };
+    }
+    case "last-week": {
+      const end = new Date(now);
+      end.setDate(now.getDate() - now.getDay() - 1);
+      const start = new Date(end);
+      start.setDate(end.getDate() - 6);
+      return { start: startOfDay(start), end: endOfDay(end) };
+    }
+    case "this-month": {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      return { start: startOfDay(start), end: endOfDay(now) };
+    }
+    case "last-month": {
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const end = new Date(now.getFullYear(), now.getMonth(), 0);
+      return { start: startOfDay(start), end: endOfDay(end) };
+    }
+    case "custom": {
+      if (!startParam || !endParam) return null;
+      return { start: startOfDay(new Date(startParam)), end: endOfDay(new Date(endParam)) };
+    }
+    default:
+      return { start: startOfDay(now), end: endOfDay(now) };
+  }
+}
+
+function previousRange(start, end) {
+  const durationMs = end.getTime() - start.getTime();
+  const prevEnd = new Date(start.getTime() - 1);
+  const prevStart = new Date(prevEnd.getTime() - durationMs);
+  return { start: prevStart, end: prevEnd };
+}
+
+function pctChange(current, previous) {
+  if (!previous) return null;
+  return Math.round(((current - previous) / previous) * 100);
+}
+
+async function fetchReportSummary(pool, start, end) {
+  const result = await pool
+    .request()
+    .input("start", sql.DateTime, start)
+    .input("end", sql.DateTime, end)
+    .query(`
+      SELECT
+        (
+          (SELECT COUNT(*) FROM Vehicle WHERE entrance_time BETWEEN @start AND @end)
+          + (SELECT COUNT(*) FROM LogVehicle WHERE entrance_time BETWEEN @start AND @end)
+        ) AS total_entries,
+        (SELECT COUNT(*) FROM LogVehicle WHERE exit_time BETWEEN @start AND @end) AS total_exits,
+        (SELECT ISNULL(SUM(cost_paid), 0) FROM LogVehicle WHERE exit_time BETWEEN @start AND @end) AS revenue,
+        (SELECT ISNULL(AVG(CAST(DATEDIFF(MINUTE, entrance_time, exit_time) AS FLOAT)), 0)
+           FROM LogVehicle WHERE exit_time BETWEEN @start AND @end) AS avg_duration_minutes,
+        (SELECT ISNULL(SUM(CAST(DATEDIFF(MINUTE, entrance_time, exit_time) AS FLOAT)), 0)
+           FROM LogVehicle WHERE exit_time BETWEEN @start AND @end) AS total_occupied_minutes,
+        (SELECT COUNT(*) FROM Spot) AS total_capacity
+    `);
+
+  const row = result.recordset[0];
+  const periodHours = Math.max((end.getTime() - start.getTime()) / 3600000, 1 / 60);
+  const totalSpotHours = row.total_capacity * periodHours;
+  const utilizationPct =
+    totalSpotHours > 0 ? Math.min((row.total_occupied_minutes / 60 / totalSpotHours) * 100, 100) : 0;
+
+  return {
+    totalEntries: row.total_entries,
+    totalExits: row.total_exits,
+    revenue: Number(row.revenue),
+    avgDurationHours: row.avg_duration_minutes / 60,
+    utilizationPct,
+  };
+}
+
+// CSV helpers
+function toCsvValue(value) {
+  if (value === null || value === undefined) return "";
+  const str = String(value);
+  if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+function toCsv(rows, columns) {
+  const header = columns.map((c) => c.label).join(",");
+  const lines = rows.map((row) => columns.map((c) => toCsvValue(row[c.key])).join(","));
+  return [header, ...lines].join("\n");
+}
+
+// GET aggregate stats for the report generator (Total Entries/Exits/Revenue/Avg Duration/Utilization)
+app.get("/api/reports/summary", async (req, res) => {
+  const { type = "daily", period = "today", start: startParam, end: endParam } = req.query;
+
+  if (type === "operator") {
+    return res.status(501).json({
+      error: "Operator performance reports require operator/shift data, which is not set up yet.",
+    });
+  }
+
+  const range = resolveDateRange(period, startParam, endParam);
+  if (!range) {
+    return res.status(400).json({ error: "A start and end date are required for a custom range" });
+  }
+
+  try {
+    const pool = await poolPromise;
+    const current = await fetchReportSummary(pool, range.start, range.end);
+    const prevRange = previousRange(range.start, range.end);
+    const previous = await fetchReportSummary(pool, prevRange.start, prevRange.end);
+
+    res.json({
+      period_start: range.start,
+      period_end: range.end,
+      total_entries: current.totalEntries,
+      total_exits: current.totalExits,
+      revenue: current.revenue,
+      avg_duration_hours: current.avgDurationHours,
+      utilization_pct: Math.round(current.utilizationPct),
+      total_entries_change_pct: pctChange(current.totalEntries, previous.totalEntries),
+      total_exits_change_pct: pctChange(current.totalExits, previous.totalExits),
+      revenue_change_pct: pctChange(current.revenue, previous.revenue),
+      avg_duration_change_pct: pctChange(current.avgDurationHours, previous.avgDurationHours),
+      utilization_change_pct: pctChange(current.utilizationPct, previous.utilizationPct),
+    });
+  } catch (err) {
+    handleDbError(res, err);
+  }
+});
+
+// GET a CSV export of the transaction-level records (entrance/exit/cost) for the selected period
+app.get("/api/reports/export", async (req, res) => {
+  const { period = "today", start: startParam, end: endParam } = req.query;
+
+  const range = resolveDateRange(period, startParam, endParam);
+  if (!range) {
+    return res.status(400).json({ error: "A start and end date are required for a custom range" });
+  }
+
+  try {
+    const pool = await poolPromise;
+    const result = await pool
+      .request()
+      .input("start", sql.DateTime, range.start)
+      .input("end", sql.DateTime, range.end)
+      .query(`
+        SELECT plate_number, entrance_time, exit_time, cost_paid
+        FROM LogVehicle
+        WHERE exit_time BETWEEN @start AND @end
+        ORDER BY exit_time
+      `);
+
+    const rows = result.recordset.map((r) => ({
+      plate_number: r.plate_number.trim(),
+      entrance_time: r.entrance_time,
+      exit_time: r.exit_time,
+      duration_hours: Math.round(((r.exit_time - r.entrance_time) / 3600000) * 100) / 100,
+      cost_paid: r.cost_paid,
+    }));
+
+    const csv = toCsv(rows, [
+      { key: "plate_number", label: "Plate Number" },
+      { key: "entrance_time", label: "Entrance Time" },
+      { key: "exit_time", label: "Exit Time" },
+      { key: "duration_hours", label: "Duration (hours)" },
+      { key: "cost_paid", label: "Cost Paid" },
+    ]);
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename="report_${period}.csv"`);
+    res.send(csv);
+  } catch (err) {
+    handleDbError(res, err);
+  }
+});
+
+
+
+
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
