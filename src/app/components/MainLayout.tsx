@@ -39,7 +39,7 @@ export function MainLayout() {
     { path: "/app/vehicle-entry", icon: LogIn, label: "Vehicle Entry", roles: ["admin", "operator"] },
     { path: "/app/vehicle-exit", icon: LogOut, label: "Vehicle Exit", roles: ["admin", "operator"] },
     { path: "/app/parking-status", icon: ParkingSquare, label: "Parking Status", roles: ["admin", "owner", "operator"] },
-    { path: "/app/operator-management", icon: Users, label: "Operator Management", roles: ["admin", "owner"] },
+    // { path: "/app/operator-management", icon: Users, label: "Operator Management", roles: ["admin", "owner"] },
     { path: "/app/shift-management", icon: Clock, label: "Shift Management", roles: ["admin", "owner"] },
     { path: "/app/shift-change-request", icon: RefreshCw, label: "Shift Change Request", roles: ["admin", "owner", "operator"] },
     { path: "/app/tariff-management", icon: DollarSign, label: "Tariff Management", roles: ["admin", "owner"] },
