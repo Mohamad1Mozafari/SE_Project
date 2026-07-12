@@ -359,21 +359,23 @@ const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Satu
 
 // ADDED: Missing helper function to resolve the select query layout for shift requests
 function shiftRequestSelect(whereClause = "") {
+  // to see the original query visit the previous commits
   return `
-    SELECT 
+    SELECT
       sr.requestID AS id,
       sr.operatorusername AS requestedBy,
       FORMAT(sr.requestDate, 'yyyy-MM-dd HH:mm') AS date,
-      sr.status AS status,
+      sr.status,
+      sr.shiftType,
+      sr.shiftDate,
       CONCAT(curr.shiftType, ' (', FORMAT(curr.shiftDate, 'yyyy-MM-dd'), ')') AS currentShift,
-      CONCAT(req.shiftType, ' (', FORMAT(req.shiftDate, 'yyyy-MM-dd'), ')') AS requestedShift,
+      CONCAT(sr.shiftType, ' (', FORMAT(sr.shiftDate, 'yyyy-MM-dd'), ')') AS requestedShift,
       sr.reason_comment AS reason
-    FROM ShiftRequest sr
-    INNER JOIN ShiftManagement curr ON sr.currentShiftID = curr.shiftID
-    LEFT JOIN ShiftManagement req ON sr.requestedShiftID = req.shiftID
-    ${whereClause}
-    ORDER BY sr.requestID DESC
-  `;
+      FROM ShiftRequest AS sr LEFT JOIN ShiftManagement AS curr
+      ON sr.currentShiftID = curr.shiftID
+      ${whereClause}
+      ORDER BY sr.requestID DESC
+  `
 }
 
 async function resolveOperatorUsername(identifier) {
@@ -811,7 +813,7 @@ app.post("/api/vehicle-exit", async (req, res) => {
 
 app.post("/api/shift_change_reuqest_operator/new_request", async (req, res) => {
   try {
-    const { username, id_shift_current, id_shift_changeTO } = req.body;
+    const { username, id_shift_current, shiftDate, shiftType } = req.body;
     const operatorUsername = await resolveOperatorUsername(username);
     if (!operatorUsername) return res.status(404).json({ error: "Operator not found" });
     if (!id_shift_current) return res.status(400).json({ error: "id_shift_current is required" });
@@ -819,11 +821,12 @@ app.post("/api/shift_change_reuqest_operator/new_request", async (req, res) => {
     const pool = await poolPromise;
     await pool.request()
       .input("currentShiftID", sql.Int, id_shift_current)
-      .input("requestedShiftID", sql.Int, id_shift_changeTO || null)
+      .input("inputShiftDate", sql.Date, shiftDate)
+      .input("inputShiftType", sql.VarChar(10), shiftType)
       .input("operatorusername", sql.VarChar(20), operatorUsername)
       .query(`
-        INSERT INTO ShiftRequest (currentShiftID, requestedShiftID, operatorusername, requestType, status)
-        VALUES (@currentShiftID, @requestedShiftID, @operatorusername, 'ShiftChange', 'Pending')
+        INSERT INTO ShiftRequest (currentShiftID, requestedShiftID, operatorusername, requestType, status, shiftDate, shiftType)
+        VALUES (@currentShiftID, NULL, @operatorusername, 'ShiftChange', 'Pending', @inputShiftDate, @inputShiftType)
       `);
 
     res.json("success");
@@ -970,13 +973,20 @@ app.post("/api/shift_management/pending_request_approve_button", async (req, res
       await pool.request()
         .input("requestID", sql.Int, shiftchangerequestID)
         .input("ownerID", sql.VarChar(20), reviewerUsername)
-        .input("decision", sql.VarChar(20), "Accepted")
+        .input("decision", sql.VarChar(20), "Approved")
         .input("feedback", sql.VarChar(255), feedback || null)
         .query(`
           INSERT INTO ShiftReview (requestID, ownerID, decision, feedback)
           VALUES (@requestID, @ownerID, @decision, @feedback)
         `);
     }
+
+    // await pool.request()
+    //   .input("inputRequestID", sql.Int, shiftchangerequestID)
+    //   .query(`
+    //     DELETE FROM ShiftManagement
+    //     WHERE requestID = @inputRequestID
+    //   `);
 
     res.json("success");
   } catch (err) { handleDbError(res, err); }
@@ -1097,6 +1107,65 @@ app.post("/api/updateTariff", async (req, res) => {
     });
   }
   catch (err) {
+    handleDbError(res, err);
+  }
+});
+
+app.post("/api/deleteShiftRequest", async (req, res) => {
+  const { requestID } = req.body;
+  if (requestID == null) {
+    return res.status(400).json({
+      error: "requestID is required"
+    });
+  }
+
+  try {
+    const pool = await poolPromise;
+    await pool.request()
+      .input("inputRequestID", sql.Int, requestID)
+      .query(`
+        DELETE FROM ShiftRequest
+        WHERE requestID = @inputRequestID
+      `);
+    res.json({
+      success: true,
+      message: "Shift request deleted."
+    });
+  }
+  catch (err) {
+    handleDbError(res, err);
+  }
+});
+
+app.post("/api/acceptShiftChange", async (req, res) => {
+  const { requestID } = req.body;
+
+  if (requestID == null) {
+    return res.status(400).json({
+      error: "requestID is required"
+    });
+  }
+
+  try {
+    const pool = await poolPromise;
+
+    const request = pool.request();
+
+    request
+      .input("requestID", sql.Int, requestID)
+      .output("shiftID", sql.Int);
+
+    const result = await request.execute("usp_UpsertShift");
+
+    const shiftID = result.output.shiftID;
+
+    res.json({
+      success: true,
+      shiftID: shiftID,
+      message: "Shift inserted/updated successfully."
+    });
+
+  } catch (err) {
     handleDbError(res, err);
   }
 });
