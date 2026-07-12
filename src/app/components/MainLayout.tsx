@@ -29,19 +29,33 @@ export function MainLayout() {
   const currentRole = roleValue && roleValue.trim() !== "" ? roleValue : "undefined";
   const currentUsername = usernameValue && usernameValue.trim() !== "" ? usernameValue : "undefined";
 
+  // Each item declares which roles are allowed to see it:
+  //  - Admin: sees everything
+  //  - Owner: sees everything except Vehicle Entry & Vehicle Exit
+  //  - Operator: no access to Operator Management, Shift Management,
+  //              Tariff Management, Reports, User Management, System Logs
   const menuItems = [
-    { path: "/app", icon: LayoutDashboard, label: "Dashboard", exact: true },
-    { path: "/app/vehicle-entry", icon: LogIn, label: "Vehicle Entry" },
-    { path: "/app/vehicle-exit", icon: LogOut, label: "Vehicle Exit" },
-    { path: "/app/parking-status", icon: ParkingSquare, label: "Parking Status" },
-    { path: "/app/operator-management", icon: Users, label: "Operator Management" },
-    { path: "/app/shift-management", icon: Clock, label: "Shift Management" },
-    { path: "/app/shift-change-request", icon: RefreshCw, label: "Shift Change Request" },
-    { path: "/app/tariff-management", icon: DollarSign, label: "Tariff Management" },
-    { path: "/app/reports", icon: FileText, label: "Reports" },
-    { path: "/app/user-management", icon: UserCog, label: "User Management" },
-    { path: "/app/system-logs", icon: ScrollText, label: "System Logs" },
+    { path: "/app", icon: LayoutDashboard, label: "Dashboard", exact: true, roles: ["admin", "owner", "operator"] },
+    { path: "/app/vehicle-entry", icon: LogIn, label: "Vehicle Entry", roles: ["admin", "operator"] },
+    { path: "/app/vehicle-exit", icon: LogOut, label: "Vehicle Exit", roles: ["admin", "operator"] },
+    { path: "/app/parking-status", icon: ParkingSquare, label: "Parking Status", roles: ["admin", "owner", "operator"] },
+    { path: "/app/operator-management", icon: Users, label: "Operator Management", roles: ["admin", "owner"] },
+    { path: "/app/shift-management", icon: Clock, label: "Shift Management", roles: ["admin", "owner"] },
+    { path: "/app/shift-change-request", icon: RefreshCw, label: "Shift Change Request", roles: ["admin", "owner", "operator"] },
+    { path: "/app/tariff-management", icon: DollarSign, label: "Tariff Management", roles: ["admin", "owner"] },
+    { path: "/app/reports", icon: FileText, label: "Reports", roles: ["admin", "owner"] },
+    { path: "/app/user-management", icon: UserCog, label: "User Management", roles: ["admin", "owner"] },
+    { path: "/app/system-logs", icon: ScrollText, label: "System Logs", roles: ["admin", "owner"] },
   ];
+
+  // Normalize the role so comparisons aren't case-sensitive (e.g. "Admin",
+  // "ADMIN", "admin" all work), then filter the menu down to only what the
+  // current role is allowed to see. Unknown/undefined roles see nothing
+  // beyond items with no role restriction (none here), i.e. an empty menu.
+  const normalizedRole = currentRole.toLowerCase();
+  const visibleMenuItems = menuItems.filter((item) =>
+    item.roles.includes(normalizedRole)
+  );
 
   const isActive = (path: string, exact?: boolean) => {
     return location.pathname === path;
@@ -67,7 +81,7 @@ export function MainLayout() {
 
         <nav className="flex-1 overflow-y-auto p-4">
           <div className="space-y-1">
-            {menuItems.map((item) => {
+            {visibleMenuItems.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.path, item.exact);
               return (

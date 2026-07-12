@@ -27,7 +27,7 @@ interface ScheduleRow {
 export function ShiftManagement() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
-  
+
   // Dynamic State variables
   const [operatorsList, setOperatorsList] = useState<string[]>([]);
   const [weekOffset, setWeekOffset] = useState<number>(0);
@@ -78,7 +78,7 @@ export function ShiftManagement() {
       const morningRes = await Morning_shift_load();
       const eveningRes = await Evening_shift_load();
       const nightRes = await Night_shift_load();
-      
+
       setTodayShifts({
         morning: morningRes?.operators || [],
         evening: eveningRes?.operators || [],
@@ -102,11 +102,11 @@ export function ShiftManagement() {
       alert(`You cannot modify historical data parameters tracking for context: ${row.day} (${row.date}).`);
       return;
     }
-    setEditingCell({ 
-      day: row.day, 
-      date: row.date, 
-      shiftType: shiftDisplay, 
-      operators: operatorsList 
+    setEditingCell({
+      day: row.day,
+      date: row.date,
+      shiftType: shiftDisplay,
+      operators: operatorsList
     });
   };
 
@@ -116,13 +116,13 @@ export function ShiftManagement() {
     const newOps = currentOps.includes(operator)
       ? currentOps.filter(op => op !== operator)
       : [...currentOps, operator];
-    
+
     setEditingCell({ ...editingCell, operators: newOps });
   };
 
   const toggleNewShiftOperator = (operator: string) => {
-    setNewShiftOperators(prev => 
-      prev.includes(operator) 
+    setNewShiftOperators(prev =>
+      prev.includes(operator)
         ? prev.filter(op => op !== operator)
         : [...prev, operator]
     );
@@ -132,28 +132,26 @@ export function ShiftManagement() {
     await Create_shift(newShiftOperators, newShiftTime, newShiftDate);
     setIsCreateModalOpen(false);
     setNewShiftOperators([]);
-    loadDashboardData(weekOffset); 
+    loadDashboardData(weekOffset);
   };
 
   const handleUpdateSchedule = async () => {
     if (!editingCell) return;
-    
-    const parsedShiftKey = editingCell.shiftType.toLowerCase().split(" ")[0]; 
 
-    // Processes structural adjustments sequentially over mapped network frames
-    for (const operator of operatorsList) {
-      const wasSelected = editingCell.operators.includes(operator);
-      
-      if (wasSelected) {
-        const payload = {
-          username: operator,
-          day: editingCell.day,
-          date: editingCell.date,
-          shift: parsedShiftKey
-        };
-        await Weekly_Schedule_edit(payload);
-      }
-    }
+    const parsedShiftKey = editingCell.shiftType.toLowerCase().split(" ")[0];
+
+    // Send the full set of currently-selected operators in ONE request.
+    // The backend cancels the whole slot once, then re-schedules exactly
+    // these operators. Looping per-operator here would re-cancel
+    // operators that a previous call in the loop had just scheduled,
+    // leaving only the last operator assigned.
+    const payload = {
+      usernames: editingCell.operators,
+      day: editingCell.day,
+      date: editingCell.date,
+      shift: parsedShiftKey
+    };
+    await Weekly_Schedule_edit(payload);
 
     setSchedule(prevSchedule => prevSchedule.map(row => {
       if (row.date === editingCell.date) {
@@ -163,7 +161,7 @@ export function ShiftManagement() {
       }
       return row;
     }));
-    
+
     setEditingCell(null);
     // Refresh statistics calculation states dynamically
     const coverageRes = await Shift_Coverage_load(weekOffset);
@@ -236,8 +234,8 @@ export function ShiftManagement() {
               </CardTitle>
               <CardDescription>Target operations assignment distribution maps tracking structure</CardDescription>
             </div>
-            <Button 
-              variant={isEditMode ? "default" : "outline"} 
+            <Button
+              variant={isEditMode ? "default" : "outline"}
               onClick={() => setIsEditMode(!isEditMode)}
             >
               {isEditMode ? "Done Editing" : "Edit Schedule"}
@@ -265,9 +263,9 @@ export function ShiftManagement() {
                         <div className="text-xs text-gray-500 font-normal mt-0.5">{row.date}</div>
                         {isPast && isEditMode && <span className="block mt-1 text-xs text-red-500 font-medium">(Past)</span>}
                       </td>
-                      
+
                       {/* Morning Slot Allocation */}
-                      <td 
+                      <td
                         className={`py-3 px-4 h-full ${isEditMode && !isPast ? 'cursor-pointer hover:bg-blue-50 border-2 border-transparent hover:border-blue-200 rounded-md transition-all' : (isEditMode && isPast ? 'cursor-not-allowed' : '')}`}
                         onClick={() => handleCellClick(row, "Morning (6AM-2PM)", row.morning)}
                       >
@@ -286,7 +284,7 @@ export function ShiftManagement() {
                       </td>
 
                       {/* Evening Slot Allocation */}
-                      <td 
+                      <td
                         className={`py-3 px-4 h-full ${isEditMode && !isPast ? 'cursor-pointer hover:bg-orange-50 border-2 border-transparent hover:border-orange-200 rounded-md transition-all' : (isEditMode && isPast ? 'cursor-not-allowed' : '')}`}
                         onClick={() => handleCellClick(row, "Evening (2PM-10PM)", row.evening)}
                       >
@@ -305,7 +303,7 @@ export function ShiftManagement() {
                       </td>
 
                       {/* Night Slot Allocation */}
-                      <td 
+                      <td
                         className={`py-3 px-4 h-full ${isEditMode && !isPast ? 'cursor-pointer hover:bg-purple-50 border-2 border-transparent hover:border-purple-200 rounded-md transition-all' : (isEditMode && isPast ? 'cursor-not-allowed' : '')}`}
                         onClick={() => handleCellClick(row, "Night (10PM-6AM)", row.night)}
                       >
@@ -394,17 +392,17 @@ export function ShiftManagement() {
             <CardContent className="pt-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                <input 
-                  type="date" 
-                  className="w-full border rounded-md p-2 text-sm" 
+                <input
+                  type="date"
+                  className="w-full border rounded-md p-2 text-sm"
                   value={newShiftDate}
                   onChange={(e) => setNewShiftDate(e.target.value)}
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Shift Time</label>
-                <select 
+                <select
                   className="w-full border rounded-md p-2 text-sm bg-white"
                   value={newShiftTime}
                   onChange={(e) => setNewShiftTime(e.target.value)}
@@ -420,8 +418,8 @@ export function ShiftManagement() {
                 <div className="max-h-40 overflow-y-auto border rounded-md p-2 space-y-2">
                   {operatorsList.map((op) => (
                     <label key={op} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
-                      <input 
-                        type="checkbox" 
+                      <input
+                        type="checkbox"
                         className="rounded border-gray-300"
                         checked={newShiftOperators.includes(op)}
                         onChange={() => toggleNewShiftOperator(op)}
@@ -460,7 +458,7 @@ export function ShiftManagement() {
                   {operatorsList.map((op) => {
                     const isSelected = editingCell.operators.includes(op);
                     return (
-                      <div 
+                      <div
                         key={op}
                         onClick={() => toggleOperatorSelection(op)}
                         className={`flex items-center justify-between p-2 rounded cursor-pointer transition-colors ${
@@ -478,15 +476,15 @@ export function ShiftManagement() {
               </div>
 
               <div className="flex gap-2 pt-2">
-                <Button 
-                  variant="outline" 
-                  className="flex-1" 
+                <Button
+                  variant="outline"
+                  className="flex-1"
                   onClick={() => setEditingCell(null)}
                 >
                   Cancel
                 </Button>
-                <Button 
-                  className="flex-1" 
+                <Button
+                  className="flex-1"
                   onClick={handleUpdateSchedule}
                 >
                   Update

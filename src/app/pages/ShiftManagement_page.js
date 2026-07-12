@@ -55,12 +55,24 @@ export async function Shift_Coverage_load(offset = 0) {
     return await response.json();
 }
 
+// ShiftManagement_page.js
+
 export async function Weekly_Schedule_edit(payload) {
-    // Sends standard object single database transaction items natively
-    const response = await fetch("http://localhost:3000/api/shift_management/Weekly_Schedule_edit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-    });
-    return await response.json(); 
+  const response = await fetch("http://localhost:3000/api/shift_management/Weekly_Schedule_edit", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  // Check if response is HTML/Error before parsing
+  if (!response.ok) {
+    const contentType = response.headers.get("content-type");
+    if (contentType && contentType.includes("application/json")) {
+      const err = await response.json();
+      throw new Error(err.error || "Failed to edit schedule");
+    }
+    throw new Error(`Server returned status ${response.status}`);
+  }
+  return await response.json(); 
 }
+

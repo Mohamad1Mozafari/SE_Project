@@ -558,37 +558,86 @@ app.post("/api/shift_management/Create_shift", async (req, res) => {
 
 app.post("/api/shift_management/Weekly_Schedule_edit", async (req, res) => {
   try {
-    const { shift, day, username, date } = req.body; // Front-end now passes explicit target date
-    const mappedUsername = await resolveOperatorUsername(username);
+    // usernames = array of ALL operators currently selected for this cell (can be empty)
+    const { shift, day, usernames, date } = req.body;
 
-    if (!mappedUsername) {
-      return res.status(400).json({ error: "Operator not found" });
+    if (!Array.isArray(usernames)) {
+      return res.status(400).json({ error: "usernames must be an array" });
+    }
+    if (!shift || !date) {
+      return res.status(400).json({ error: "shift and date are required" });
     }
 
-    const pool = await poolPromise;
-    // Standardizes database casing formatting structure
+    // Resolve every display name -> actual operator username up front,
+    // so we fail fast before touching the DB if one doesn't exist.
+    const resolvedUsernames = [];
+    for (const u of usernames) {
+      const mapped = await resolveOperatorUsername(u);
+      if (!mapped) {
+        return res.status(400).json({ error: `Operator not found: ${u}` });
+      }
+      resolvedUsernames.push(mapped);
+    }
+
     const formattedShift = shift.charAt(0).toUpperCase() + shift.slice(1).toLowerCase();
 
-    await pool.request()
-      .input("operatorID", sql.VarChar(20), mappedUsername)
-      .input("shiftDate", sql.Date, date)
-      .input("shiftType", sql.VarChar(10), formattedShift)
-      .query(`
-        IF NOT EXISTS (
-          SELECT 1 FROM ShiftManagement 
-          WHERE operatorID = @operatorID AND shiftDate = @shiftDate AND shiftType = @shiftType AND status <> 'Cancelled'
-        )
-        BEGIN
-          INSERT INTO ShiftManagement (operatorID, shiftDate, shiftType, status)
-          VALUES (@operatorID, @shiftDate, @shiftType, 'Scheduled')
-        END
-      `);
+    const pool = await poolPromise;
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
 
-    res.json("success");
+    try {
+      // 1. Cancel every currently-scheduled row for this slot, ONCE.
+      await transaction.request()
+        .input("shiftDate", sql.Date, date)
+        .input("shiftType", sql.VarChar(10), formattedShift)
+        .query(`
+          UPDATE ShiftManagement
+          SET status = 'Cancelled'
+          WHERE shiftDate = @shiftDate
+            AND shiftType = @shiftType
+            AND status = 'Scheduled';
+        `);
+
+      // 2. For each operator that should end up assigned: reactivate their
+      //    cancelled row for this exact slot if it exists, otherwise insert one.
+      for (const operatorID of resolvedUsernames) {
+        const reactivate = await transaction.request()
+          .input("operatorID", sql.VarChar(20), operatorID)
+          .input("shiftDate", sql.Date, date)
+          .input("shiftType", sql.VarChar(10), formattedShift)
+          .query(`
+            UPDATE ShiftManagement
+            SET status = 'Scheduled'
+            WHERE operatorID = @operatorID
+              AND shiftDate = @shiftDate
+              AND shiftType = @shiftType
+              AND status = 'Cancelled';
+          `);
+
+        if (reactivate.rowsAffected[0] === 0) {
+          await transaction.request()
+            .input("operatorID", sql.VarChar(20), operatorID)
+            .input("shiftDate", sql.Date, date)
+            .input("shiftType", sql.VarChar(10), formattedShift)
+            .query(`
+              INSERT INTO ShiftManagement (operatorID, shiftDate, shiftType, status)
+              VALUES (@operatorID, @shiftDate, @shiftType, 'Scheduled');
+            `);
+        }
+      }
+
+      await transaction.commit();
+      res.json({ status: "success" });
+    } catch (innerErr) {
+      await transaction.rollback();
+      throw innerErr;
+    }
   } catch (err) {
-    res.status(500).json(err.message);
+    res.status(500).json({ error: err.message });
   }
 });
+
+
 
 
 
