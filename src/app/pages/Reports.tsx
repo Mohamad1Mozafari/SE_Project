@@ -1,44 +1,132 @@
 import { useState } from "react";
-import { ArrowRight, Download, FileText, Calendar, TrendingUp, DollarSign, Car } from "lucide-react";
+import { ArrowRight, Download, FileText, Calendar, TrendingUp, Car } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Label } from "../components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { toast } from "sonner";
+import { get_report_summary, download_report_csv } from "./ReportsHandler";
+
+interface ReportSummary {
+  period_start: string;
+  period_end: string;
+  total_entries: number;
+  total_exits: number;
+  revenue: number;
+  avg_duration_hours: number;
+  utilization_pct: number;
+  total_entries_change_pct: number | null;
+  total_exits_change_pct: number | null;
+  revenue_change_pct: number | null;
+  avg_duration_change_pct: number | null;
+  utilization_change_pct: number | null;
+}
+
+const periodLabels: Record<string, string> = {
+  today: "Today",
+  yesterday: "Yesterday",
+  "this-week": "This Week",
+  "last-week": "Last Week",
+  "this-month": "This Month",
+  "last-month": "Last Month",
+  custom: "Custom Range",
+};
 
 export function Reports() {
   const [reportType, setReportType] = useState("daily");
   const [reportPeriod, setReportPeriod] = useState("today");
-
-  const handleGenerateReport = () => {
-    toast.success(`${reportType} report generated for ${reportPeriod}`);
-  };
-
-  const handleDownloadReport = (format: string) => {
-    toast.success(`Downloading report as ${format.toUpperCase()}`);
-  };
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
+  const [summary, setSummary] = useState<ReportSummary | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const reportTypes = [
     { value: "daily", label: "Daily Summary", icon: Calendar },
-    { value: "revenue", label: "Revenue Report", icon: DollarSign },
     { value: "occupancy", label: "Occupancy Report", icon: Car },
     { value: "operator", label: "Operator Performance", icon: TrendingUp },
   ];
 
-  const summaryStats = [
-    { label: "Total Entries", value: "342", change: "+12%", positive: true },
-    { label: "Total Exits", value: "328", change: "+8%", positive: true },
-    { label: "Revenue", value: "$2,450", change: "+15%", positive: true },
-    { label: "Avg Duration", value: "3.2 hrs", change: "-5%", positive: false },
-  ];
+  const isCustomRangeIncomplete = reportPeriod === "custom" && (!customStart || !customEnd);
+  const isOperatorType = reportType === "operator";
 
-  const recentReports = [
-    { name: "Daily Summary - May 29, 2026", date: "Yesterday", type: "Daily" },
-    { name: "Revenue Report - Week 21", date: "2 days ago", type: "Revenue" },
-    { name: "Occupancy Report - May 2026", date: "5 days ago", type: "Occupancy" },
-    { name: "Operator Performance - Q2 2026", date: "1 week ago", type: "Operator" },
-  ];
+  const handleGenerateReport = async () => {
+    if (reportType === "operator") {
+      toast.error("Operator performance reports require operator/shift data, which isn't set up yet.");
+      return;
+    }
+    if (isCustomRangeIncomplete) {
+      toast.error("Please select both a start and end date");
+      return;
+    }
+
+    setIsGenerating(true);
+    const result = await get_report_summary({
+      type: reportType,
+      period: reportPeriod,
+      start: reportPeriod === "custom" ? customStart : undefined,
+      end: reportPeriod === "custom" ? customEnd : undefined,
+    });
+    setIsGenerating(false);
+
+    if (result.ok) {
+      setSummary(result.data);
+      const typeLabel = reportTypes.find((t) => t.value === reportType)?.label;
+      toast.success(`${typeLabel} generated for ${periodLabels[reportPeriod]}`);
+    } else {
+      toast.error(result.error);
+    }
+  };
+
+  const handleDownloadCsv = async () => {
+    if (isOperatorType) {
+      toast.error("Operator performance reports aren't available yet.");
+      return;
+    }
+    if (isCustomRangeIncomplete) {
+      toast.error("Please select both a start and end date");
+      return;
+    }
+
+    setIsDownloading(true);
+    const blob = await download_report_csv({
+      period: reportPeriod,
+      start: reportPeriod === "custom" ? customStart : undefined,
+      end: reportPeriod === "custom" ? customEnd : undefined,
+    });
+    setIsDownloading(false);
+
+    if (!blob) {
+      toast.error("Failed to download CSV report");
+      return;
+    }
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `report_${reportPeriod}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast.success("CSV report downloaded");
+  };
+
+  const statCards = summary
+    ? reportType === "occupancy"
+      ? [
+          { label: "Total Entries", value: summary.total_entries.toString(), change: summary.total_entries_change_pct },
+          { label: "Total Exits", value: summary.total_exits.toString(), change: summary.total_exits_change_pct },
+          { label: "Utilization", value: `${summary.utilization_pct}%`, change: summary.utilization_change_pct },
+          { label: "Avg Duration", value: `${summary.avg_duration_hours.toFixed(1)} hrs`, change: summary.avg_duration_change_pct },
+        ]
+      : [
+          { label: "Total Entries", value: summary.total_entries.toString(), change: summary.total_entries_change_pct },
+          { label: "Total Exits", value: summary.total_exits.toString(), change: summary.total_exits_change_pct },
+          { label: "Revenue", value: `${summary.revenue.toFixed(2)} T`, change: summary.revenue_change_pct },
+          { label: "Avg Duration", value: `${summary.avg_duration_hours.toFixed(1)} hrs`, change: summary.avg_duration_change_pct },
+        ]
+    : [];
 
   return (
     <div className="p-8">
@@ -79,6 +167,11 @@ export function Reports() {
                         ))}
                       </SelectContent>
                     </Select>
+                    {isOperatorType && (
+                      <p className="text-xs text-gray-500">
+                        Requires operator/shift data — coming soon.
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -100,140 +193,87 @@ export function Reports() {
                   </div>
                 </div>
 
+                {reportPeriod === "custom" && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="start-date">Start Date</Label>
+                      <input
+                        id="start-date"
+                        type="date"
+                        value={customStart}
+                        onChange={(e) => setCustomStart(e.target.value)}
+                        className="w-full border rounded-md px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="end-date">End Date</Label>
+                      <input
+                        id="end-date"
+                        type="date"
+                        value={customEnd}
+                        onChange={(e) => setCustomEnd(e.target.value)}
+                        className="w-full border rounded-md px-3 py-2 text-sm"
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex gap-3">
-                  <Button onClick={handleGenerateReport} className="flex-1">
+                  <Button
+                    onClick={handleGenerateReport}
+                    className="flex-1"
+                    disabled={isGenerating || isOperatorType}
+                  >
                     <FileText className="w-4 h-4 mr-2" />
-                    Generate Report
+                    {isGenerating ? "Generating..." : "Generate Report"}
                   </Button>
-                  <Button variant="outline" onClick={() => handleDownloadReport("pdf")}>
+                  <Button
+                    variant="outline"
+                    onClick={handleDownloadCsv}
+                    disabled={isDownloading || isOperatorType}
+                  >
                     <Download className="w-4 h-4 mr-2" />
-                    PDF
-                  </Button>
-                  <Button variant="outline" onClick={() => handleDownloadReport("csv")}>
-                    <Download className="w-4 h-4 mr-2" />
-                    CSV
+                    {isDownloading ? "Downloading..." : "CSV"}
                   </Button>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Today's Summary</CardTitle>
-              <CardDescription>Key metrics for May 30, 2026</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {summaryStats.map((stat) => (
-                  <div key={stat.label} className="space-y-2">
-                    <p className="text-sm text-gray-600">{stat.label}</p>
-                    <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-                    <p className={`text-sm ${stat.positive ? "text-green-600" : "text-red-600"}`}>
-                      {stat.change} vs yesterday
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent Reports</CardTitle>
-              <CardDescription>Previously generated reports</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {recentReports.map((report, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-blue-50 rounded-lg">
-                        <FileText className="w-4 h-4 text-blue-600" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">{report.name}</p>
-                        <p className="text-sm text-gray-500">{report.date} · {report.type}</p>
-                      </div>
+          {summary && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Report Summary</CardTitle>
+                <CardDescription>Key metrics for {periodLabels[reportPeriod]}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {statCards.map((stat) => (
+                    <div key={stat.label} className="space-y-2">
+                      <p className="text-sm text-gray-600">{stat.label}</p>
+                      <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                      {stat.change !== null && stat.change !== undefined && (
+                        <p className={`text-sm ${stat.change >= 0 ? "text-green-600" : "text-red-600"}`}>
+                          {stat.change >= 0 ? "+" : ""}
+                          {stat.change}% vs previous period
+                        </p>
+                      )}
                     </div>
-                    <Button variant="ghost" size="sm">
-                      <Download className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
-        {/* Quick Reports Panel */}
+        {/* Export Options Panel */}
         <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Quick Reports</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {reportTypes.map((type) => {
-                const Icon = type.icon;
-                return (
-                  <Button
-                    key={type.value}
-                    variant="outline"
-                    className="w-full justify-start"
-                    onClick={() => {
-                      setReportType(type.value);
-                      handleGenerateReport();
-                    }}
-                  >
-                    <Icon className="w-4 h-4 mr-2" />
-                    {type.label}
-                  </Button>
-                );
-              })}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Report Schedule</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="font-medium">Daily Summary</p>
-                  <p className="text-xs text-gray-500">Every day at 11:59 PM</p>
-                </div>
-                <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">Active</span>
-              </div>
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="font-medium">Weekly Revenue</p>
-                  <p className="text-xs text-gray-500">Sundays at 11:59 PM</p>
-                </div>
-                <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">Active</span>
-              </div>
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="font-medium">Monthly Analysis</p>
-                  <p className="text-xs text-gray-500">Last day of month</p>
-                </div>
-                <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">Active</span>
-              </div>
-            </CardContent>
-          </Card>
-
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Export Options</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm text-gray-600">
-              <p>• PDF - Formatted reports</p>
-              <p>• CSV - Data analysis</p>
-              <p>• Excel - Detailed spreadsheets</p>
-              <p>• JSON - API integration</p>
+              <p>• CSV - Transaction-level data for the selected period, ready for spreadsheet analysis</p>
             </CardContent>
           </Card>
         </div>
