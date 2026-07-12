@@ -24,12 +24,22 @@ export async function rejected_request() {
   return await response.json();
 }
 
-export async function pending_request_approve_button(shiftchangerequestID) {
+export async function pending_request_approve_button(shiftchangerequestID, shiftDate, shiftType, operatorID) {
   const response = await fetch("http://localhost:3000/api/shift_management/pending_request_approve_button", { 
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ shiftchangerequestID })
   });
+  const move_resp = await fetch("http://localhost:3000/api/acceptShiftChange", { 
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(
+      {
+         requestID: shiftchangerequestID,
+      }
+    )
+  });
+  // console.log(`sd: ${shiftDate}, st: ${shiftType}, opID: ${operatorID}`);
   return await response.json();
 }
 

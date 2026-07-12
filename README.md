@@ -59,7 +59,9 @@ After setting up node.js on your machine, the next step is to install the projec
   ```
   npm install
   ```
+
   or:
+
   ```
   npm ci
   ```
@@ -68,7 +70,13 @@ to install the dependencies. This may take a while. After this, you can now run 
 
 ## Running the project
 
-To run the project, make sure you are in the project's root directory then execute:
+To be able to run the project, make sure you are running the `server.js` file responsible for connecting the app to the database. To do this, in a separate terminal run:
+
+  ```bash
+  node src/app/js_files/server.js
+  ```
+
+To launch the app, make sure you are in the project's root directory then execute:
 
   ```
   npm start
@@ -137,8 +145,3 @@ repository](https://github.com/PurpleBooth/a-good-readme-template/tags).
 
 This project is licensed under the [MIT License](LICENSE.md) - see the [LICENSE.md](LICENSE.md) file for details
 
-## to run 
-npm start
-npm run electron 
-cd src\app\js_files
-node server.js
