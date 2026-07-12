@@ -51,58 +51,35 @@ export function ShiftChangeRequest() {
   const isAdminOrOwner = role === "admin" || role === "owner";
 
   // Load Request Lists Data
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      if (isAdminOrOwner) {
-        // Load Admin/Owner Data
-        const pending = await admin_pending();
-        const approved = await admin_approved();
-        const rejected = await admin_rejected();
-        
-        setPendingRequests(pending || []);
-        setApprovedRequests(approved || []);
-        setRejectedRequests(rejected || []);
-      } else {
-        // Load Operator Data
-        const pending = await op_pending();
-        const approved = await op_approved();
-        const rejected = await op_rejected();
+  // Load Request Lists Data
+const loadData = async () => {
+  setIsLoading(true);
+  try {
+    if (isAdminOrOwner) {
+      // Load Admin/Owner Data
+      const pending = await admin_pending();
+      const approved = await admin_approved();
+      const rejected = await admin_rejected();
 
-        // Combine to find the latest request
-        const allRequests = [...(pending || []), ...(approved || []), ...(rejected || [])];
-        
-        if (allRequests.length > 0) {
-          // Sort by ID descending (assuming higher ID = newer request)
-          allRequests.sort((a, b) => b.id - a.id);
-          const latestRequest = allRequests[0];
-          
-          // Clear all states
-          setPendingRequests([]);
-          setApprovedRequests([]);
-          setRejectedRequests([]);
+      setPendingRequests(pending || []);
+      setApprovedRequests(approved || []);
+      setRejectedRequests(rejected || []);
+    } else {
+      // Load Operator Data
+      const pending = await op_pending();
+      const approved = await op_approved();
+      const rejected = await op_rejected();
 
-          // Only set the state for the table that matches the latest request status
-          const statusLower = latestRequest.status?.toLowerCase();
-          if (statusLower === "pending") {
-            setPendingRequests([latestRequest]);
-          } else if (statusLower === "approved") {
-            setApprovedRequests([latestRequest]);
-          } else {
-            setRejectedRequests([latestRequest]);
-          }
-        } else {
-          setPendingRequests([]);
-          setApprovedRequests([]);
-          setRejectedRequests([]);
-        }
-      }
-    } catch (error) {
-      console.error("Failed to load shift requests", error);
-    } finally {
-      setIsLoading(false);
+      setPendingRequests(pending || []);
+      setApprovedRequests(approved || []);
+      setRejectedRequests(rejected || []);
     }
-  };
+  } catch (error) {
+    console.error("Failed to load shift requests", error);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   // Load shift dropdown listings for Operator view
   const loadDropdownOptions = async () => {
@@ -124,8 +101,8 @@ export function ShiftChangeRequest() {
   }, [role]);
 
   // Action Handlers
-  const handleApprove = async (id: number) => {
-    await pending_request_approve_button(id);
+  const handleApprove = async (id: number, shiftDate, shiftType) => {
+    await pending_request_approve_button(id, shiftDate, shiftType, get_user_name());
     loadData(); 
   };
 
@@ -416,7 +393,7 @@ export function ShiftChangeRequest() {
                     <div className="flex gap-3">
                       {isAdminOrOwner ? (
                         <>
-                          <Button size="sm" onClick={() => handleApprove(request.id)} className="bg-green-600 hover:bg-green-700">
+                          <Button size="sm" onClick={() => handleApprove(request.id, request.shiftDate, request.shiftType)} className="bg-green-600 hover:bg-green-700">
                             <CheckCircle className="w-4 h-4 mr-2" />
                             Approve
                           </Button>

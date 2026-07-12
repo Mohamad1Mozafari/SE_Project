@@ -342,6 +342,8 @@ function shiftRequestSelect(whereClause = "") {
       sr.operatorusername AS requestedBy,
       FORMAT(sr.requestDate, 'yyyy-MM-dd HH:mm') AS date,
       sr.status,
+      sr.shiftType,
+      sr.shiftDate,
       CONCAT(curr.shiftType, ' (', FORMAT(curr.shiftDate, 'yyyy-MM-dd'), ')') AS currentShift,
       CONCAT(sr.shiftType, ' (', FORMAT(sr.shiftDate, 'yyyy-MM-dd'), ')') AS requestedShift,
       sr.reason_comment AS reason
@@ -921,13 +923,20 @@ app.post("/api/shift_management/pending_request_approve_button", async (req, res
       await pool.request()
         .input("requestID", sql.Int, shiftchangerequestID)
         .input("ownerID", sql.VarChar(20), reviewerUsername)
-        .input("decision", sql.VarChar(20), "Accepted")
+        .input("decision", sql.VarChar(20), "Approved")
         .input("feedback", sql.VarChar(255), feedback || null)
         .query(`
           INSERT INTO ShiftReview (requestID, ownerID, decision, feedback)
           VALUES (@requestID, @ownerID, @decision, @feedback)
         `);
     }
+
+    // await pool.request()
+    //   .input("inputRequestID", sql.Int, shiftchangerequestID)
+    //   .query(`
+    //     DELETE FROM ShiftManagement
+    //     WHERE requestID = @inputRequestID
+    //   `);
 
     res.json("success");
   } catch (err) { handleDbError(res, err); }
@@ -1079,11 +1088,11 @@ app.post("/api/deleteShiftRequest", async (req, res) => {
 });
 
 app.post("/api/acceptShiftChange", async (req, res) => {
-  const { shiftDate, shiftType, operatorID } = req.body;
+  const { requestID } = req.body;
 
-  if (shiftDate == null || shiftType == null || operatorID == null) {
+  if (requestID == null) {
     return res.status(400).json({
-      error: "shiftDate, shiftType and operatorID are required"
+      error: "requestID is required"
     });
   }
 
@@ -1093,9 +1102,7 @@ app.post("/api/acceptShiftChange", async (req, res) => {
     const request = pool.request();
 
     request
-      .input("shiftDate", sql.Date, shiftDate)
-      .input("shiftType", sql.VarChar, shiftType)
-      .input("operatorID", sql.VarChar, operatorID)
+      .input("requestID", sql.Int, requestID)
       .output("shiftID", sql.Int);
 
     const result = await request.execute("usp_UpsertShift");
