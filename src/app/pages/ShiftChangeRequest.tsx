@@ -9,6 +9,11 @@ import { Label } from "../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { get_user_name, get_role } from "./USername_role.js"; 
 
+import { Calendar as CalendarIcon } from "lucide-react";
+import { Calendar } from "../components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
+import { format } from "date-fns";
+
 // Import operator APIs
 import {
   new_request,
@@ -33,12 +38,13 @@ export function ShiftChangeRequest() {
   const [approvedRequests, setApprovedRequests] = useState<any[]>([]);
   const [rejectedRequests, setRejectedRequests] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
-  // States for the new request dialog form
   const [currentShiftsOptions, setCurrentShiftsOptions] = useState<any[]>([]);
   const [requestedShiftsOptions, setRequestedShiftsOptions] = useState<any[]>([]);
   const [selectedCurrentShift, setSelectedCurrentShift] = useState<string>("");
   const [selectedRequestedShift, setSelectedRequestedShift] = useState<string>("");
+  const [selectedDate, setSelectedDate] = useState<Date>();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const role = get_role();
@@ -134,12 +140,33 @@ export function ShiftChangeRequest() {
   };
 
   const handleSubmitNewRequest = async () => {
-    if (!selectedCurrentShift || !selectedRequestedShift) {
+      const sqlDate = selectedDate
+        ? selectedDate.toISOString().split("T")[0]
+        : null;
+  
+    if (!selectedCurrentShift || !sqlDate || !selectedRequestedShift) {
       alert("Please select both shifts before submitting.");
       return;
     }
+
+      const alreadyExists = currentShiftsOptions.some((shift) => {
+      const existingDate = new Date(shift.shiftDate)
+        .toISOString()
+        .split("T")[0];
+
+      return (
+        existingDate === sqlDate &&
+        shift.shiftType === selectedRequestedShift
+      );
+    });
+
+    if (alreadyExists) {
+      alert("You already have this shift assigned in your schedule.");
+      return;
+    }
+
     try {
-      await new_request(Number(selectedCurrentShift), Number(selectedRequestedShift));
+      await new_request(Number(selectedCurrentShift), sqlDate, selectedRequestedShift);
       setIsDialogOpen(false); // Close modal
       setSelectedCurrentShift(""); // Reset selection
       setSelectedRequestedShift(""); // Reset selection
@@ -205,17 +232,56 @@ export function ShiftChangeRequest() {
   </Select>
 </div>
 <div className="space-y-2">
-  <Label>Requested Shift</Label>
-  <Select value={selectedRequestedShift} onValueChange={setSelectedRequestedShift}>
+  <Label>Requested Shift Date</Label>
+
+<Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+  <PopoverTrigger asChild>
+    <Button
+      variant="outline"
+      className="w-full justify-start text-left font-normal"
+    >
+      <CalendarIcon className="mr-2 h-4 w-4" />
+      {selectedDate ? (
+        format(selectedDate, "PPP")
+      ) : (
+        <span>Select desired date</span>
+      )}
+    </Button>
+  </PopoverTrigger>
+
+  <PopoverContent
+    className="w-auto p-0"
+    align="start"
+    sideOffset={4}
+    avoidCollisions={false}
+  >
+    <Calendar
+      mode="single"
+      selected={selectedDate}
+      onSelect={(date) => {
+        setSelectedDate(date);
+        setIsCalendarOpen(false);
+      }}
+      initialFocus
+    />
+  </PopoverContent>
+</Popover>
+</div>
+<div className="space-y-2">
+  <Label>Shift Type</Label>
+
+  <Select
+    value={selectedRequestedShift}
+    onValueChange={setSelectedRequestedShift}
+  >
     <SelectTrigger>
-      <SelectValue placeholder="Select desired shift" />
+      <SelectValue placeholder="Select shift type" />
     </SelectTrigger>
+
     <SelectContent>
-      {requestedShiftsOptions.map((shift) => (
-        <SelectItem key={shift.shiftID} value={String(shift.shiftID)}>
-          {new Date(shift.shiftDate).toLocaleDateString()} — {shift.shiftType}
-        </SelectItem>
-      ))}
+      <SelectItem value="Morning">Morning</SelectItem>
+      <SelectItem value="Evening">Evening</SelectItem>
+      <SelectItem value="Night">Night</SelectItem>
     </SelectContent>
   </Select>
 </div>
@@ -318,7 +384,7 @@ export function ShiftChangeRequest() {
                       <div>
                         <p className="text-xs text-gray-500 mb-1">Requested Shift</p>
                         <p className="text-sm font-medium bg-blue-50 text-blue-700 px-3 py-2 rounded">
-                          {request.requestedShift}
+                            {request.requestedShift}
                         </p>
                       </div>
                     </div>
