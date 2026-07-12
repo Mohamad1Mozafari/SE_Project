@@ -1,12 +1,12 @@
 // ShiftChangeRequest_operator_view.js
 import { get_user_name } from "./USername_role.js"; 
 
-export async function new_request(id_shift_current, id_shift_changeTO) {
+export async function new_request(id_shift_current, shiftDate, shiftType) {
   let username = get_user_name();
   const response = await fetch("http://localhost:3000/api/shift_change_reuqest_operator/new_request", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, id_shift_current, id_shift_changeTO })
+    body: JSON.stringify({ username, id_shift_current, shiftDate, shiftType })
   });
   return await response.json();
 }

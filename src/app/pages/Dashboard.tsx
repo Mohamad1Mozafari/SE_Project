@@ -115,7 +115,7 @@ export function Dashboard() {
         },
         {
           title: "Today's Revenue",
-          value: `$${statsData.todays_revenue.toFixed(2)}`,
+          value: `T${statsData.todays_revenue.toFixed(2)}`,
           icon: DollarSign,
           color: "text-purple-600",
           bgColor: "bg-purple-50",

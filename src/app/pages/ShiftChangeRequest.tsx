@@ -9,6 +9,11 @@ import { Label } from "../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { get_user_name, get_role } from "./USername_role.js"; 
 
+import { Calendar as CalendarIcon } from "lucide-react";
+import { Calendar } from "../components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
+import { format } from "date-fns";
+
 // Import operator APIs
 import {
   new_request,
@@ -33,70 +38,48 @@ export function ShiftChangeRequest() {
   const [approvedRequests, setApprovedRequests] = useState<any[]>([]);
   const [rejectedRequests, setRejectedRequests] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
-  // States for the new request dialog form
   const [currentShiftsOptions, setCurrentShiftsOptions] = useState<any[]>([]);
   const [requestedShiftsOptions, setRequestedShiftsOptions] = useState<any[]>([]);
   const [selectedCurrentShift, setSelectedCurrentShift] = useState<string>("");
   const [selectedRequestedShift, setSelectedRequestedShift] = useState<string>("");
+  const [selectedDate, setSelectedDate] = useState<Date>();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const role = get_role();
   const isAdminOrOwner = role === "admin" || role === "owner";
 
   // Load Request Lists Data
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      if (isAdminOrOwner) {
-        // Load Admin/Owner Data
-        const pending = await admin_pending();
-        const approved = await admin_approved();
-        const rejected = await admin_rejected();
-        
-        setPendingRequests(pending || []);
-        setApprovedRequests(approved || []);
-        setRejectedRequests(rejected || []);
-      } else {
-        // Load Operator Data
-        const pending = await op_pending();
-        const approved = await op_approved();
-        const rejected = await op_rejected();
+  // Load Request Lists Data
+const loadData = async () => {
+  setIsLoading(true);
+  try {
+    if (isAdminOrOwner) {
+      // Load Admin/Owner Data
+      const pending = await admin_pending();
+      const approved = await admin_approved();
+      const rejected = await admin_rejected();
 
-        // Combine to find the latest request
-        const allRequests = [...(pending || []), ...(approved || []), ...(rejected || [])];
-        
-        if (allRequests.length > 0) {
-          // Sort by ID descending (assuming higher ID = newer request)
-          allRequests.sort((a, b) => b.id - a.id);
-          const latestRequest = allRequests[0];
-          
-          // Clear all states
-          setPendingRequests([]);
-          setApprovedRequests([]);
-          setRejectedRequests([]);
+      setPendingRequests(pending || []);
+      setApprovedRequests(approved || []);
+      setRejectedRequests(rejected || []);
+    } else {
+      // Load Operator Data
+      const pending = await op_pending();
+      const approved = await op_approved();
+      const rejected = await op_rejected();
 
-          // Only set the state for the table that matches the latest request status
-          const statusLower = latestRequest.status?.toLowerCase();
-          if (statusLower === "pending") {
-            setPendingRequests([latestRequest]);
-          } else if (statusLower === "approved") {
-            setApprovedRequests([latestRequest]);
-          } else {
-            setRejectedRequests([latestRequest]);
-          }
-        } else {
-          setPendingRequests([]);
-          setApprovedRequests([]);
-          setRejectedRequests([]);
-        }
-      }
-    } catch (error) {
-      console.error("Failed to load shift requests", error);
-    } finally {
-      setIsLoading(false);
+      setPendingRequests(pending || []);
+      setApprovedRequests(approved || []);
+      setRejectedRequests(rejected || []);
     }
-  };
+  } catch (error) {
+    console.error("Failed to load shift requests", error);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   // Load shift dropdown listings for Operator view
   const loadDropdownOptions = async () => {
@@ -118,8 +101,8 @@ export function ShiftChangeRequest() {
   }, [role]);
 
   // Action Handlers
-  const handleApprove = async (id: number) => {
-    await pending_request_approve_button(id);
+  const handleApprove = async (id: number, shiftDate, shiftType) => {
+    await pending_request_approve_button(id, shiftDate, shiftType, get_user_name());
     loadData(); 
   };
 
@@ -129,17 +112,55 @@ export function ShiftChangeRequest() {
   };
 
   const handleOperatorDelete = async (id: number) => {
-    console.log("Operator requested to delete request ID:", id);
-    // Add delete logic wrapper here if endpoint becomes available
-  };
+  try {
+    const response = await fetch("http://localhost:3000/api/deleteShiftRequest", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ requestID: id })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || "Failed to delete request");
+    }
+
+    // Remove the deleted request from local state so its card disappears
+    setPendingRequests((prev) => prev.filter((request) => request.id !== id));
+  } catch (error) {
+    console.error("Failed to delete shift request", error);
+  }
+};
 
   const handleSubmitNewRequest = async () => {
-    if (!selectedCurrentShift || !selectedRequestedShift) {
+      const sqlDate = selectedDate
+        ? selectedDate.toISOString().split("T")[0]
+        : null;
+  
+    if (!selectedCurrentShift || !sqlDate || !selectedRequestedShift) {
       alert("Please select both shifts before submitting.");
       return;
     }
+
+      const alreadyExists = currentShiftsOptions.some((shift) => {
+      const existingDate = new Date(shift.shiftDate)
+        .toISOString()
+        .split("T")[0];
+
+      return (
+        existingDate === sqlDate &&
+        shift.shiftType === selectedRequestedShift
+      );
+    });
+
+    if (alreadyExists) {
+      alert("You already have this shift assigned in your schedule.");
+      return;
+    }
+
     try {
-      await new_request(Number(selectedCurrentShift), Number(selectedRequestedShift));
+      await new_request(Number(selectedCurrentShift), sqlDate, selectedRequestedShift);
       setIsDialogOpen(false); // Close modal
       setSelectedCurrentShift(""); // Reset selection
       setSelectedRequestedShift(""); // Reset selection
@@ -205,17 +226,56 @@ export function ShiftChangeRequest() {
   </Select>
 </div>
 <div className="space-y-2">
-  <Label>Requested Shift</Label>
-  <Select value={selectedRequestedShift} onValueChange={setSelectedRequestedShift}>
+  <Label>Requested Shift Date</Label>
+
+<Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+  <PopoverTrigger asChild>
+    <Button
+      variant="outline"
+      className="w-full justify-start text-left font-normal"
+    >
+      <CalendarIcon className="mr-2 h-4 w-4" />
+      {selectedDate ? (
+        format(selectedDate, "PPP")
+      ) : (
+        <span>Select desired date</span>
+      )}
+    </Button>
+  </PopoverTrigger>
+
+  <PopoverContent
+    className="w-auto p-0"
+    align="start"
+    sideOffset={4}
+    avoidCollisions={false}
+  >
+    <Calendar
+      mode="single"
+      selected={selectedDate}
+      onSelect={(date) => {
+        setSelectedDate(date);
+        setIsCalendarOpen(false);
+      }}
+      initialFocus
+    />
+  </PopoverContent>
+</Popover>
+</div>
+<div className="space-y-2">
+  <Label>Shift Type</Label>
+
+  <Select
+    value={selectedRequestedShift}
+    onValueChange={setSelectedRequestedShift}
+  >
     <SelectTrigger>
-      <SelectValue placeholder="Select desired shift" />
+      <SelectValue placeholder="Select shift type" />
     </SelectTrigger>
+
     <SelectContent>
-      {requestedShiftsOptions.map((shift) => (
-        <SelectItem key={shift.shiftID} value={String(shift.shiftID)}>
-          {new Date(shift.shiftDate).toLocaleDateString()} — {shift.shiftType}
-        </SelectItem>
-      ))}
+      <SelectItem value="Morning">Morning</SelectItem>
+      <SelectItem value="Evening">Evening</SelectItem>
+      <SelectItem value="Night">Night</SelectItem>
     </SelectContent>
   </Select>
 </div>
@@ -318,7 +378,7 @@ export function ShiftChangeRequest() {
                       <div>
                         <p className="text-xs text-gray-500 mb-1">Requested Shift</p>
                         <p className="text-sm font-medium bg-blue-50 text-blue-700 px-3 py-2 rounded">
-                          {request.requestedShift}
+                            {request.requestedShift}
                         </p>
                       </div>
                     </div>
@@ -333,7 +393,7 @@ export function ShiftChangeRequest() {
                     <div className="flex gap-3">
                       {isAdminOrOwner ? (
                         <>
-                          <Button size="sm" onClick={() => handleApprove(request.id)} className="bg-green-600 hover:bg-green-700">
+                          <Button size="sm" onClick={() => handleApprove(request.id, request.shiftDate, request.shiftType)} className="bg-green-600 hover:bg-green-700">
                             <CheckCircle className="w-4 h-4 mr-2" />
                             Approve
                           </Button>
