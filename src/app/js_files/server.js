@@ -1052,6 +1052,32 @@ app.post("/api/updateTariff", async (req, res) => {
   }
 });
 
+app.post("/api/deleteShiftRequest", async (req, res) => {
+  const { requestID } = req.body;
+  if (requestID == null) {
+    return res.status(400).json({
+      error: "requestID is required"
+    });
+  }
+
+  try {
+    const pool = await poolPromise;
+    await pool.request()
+      .input("inputRequestID", sql.Int, requestID)
+      .query(`
+        DELETE FROM ShiftRequest
+        WHERE requestID = @inputRequestID
+      `);
+    res.json({
+      success: true,
+      message: "Shift request deleted."
+    });
+  }
+  catch (err) {
+    handleDbError(res, err);
+  }
+});
+
 app.post("/api/acceptShiftChange", async (req, res) => {
   const { shiftDate, shiftType, operatorID } = req.body;
 

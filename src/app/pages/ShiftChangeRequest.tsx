@@ -135,9 +135,26 @@ export function ShiftChangeRequest() {
   };
 
   const handleOperatorDelete = async (id: number) => {
-    console.log("Operator requested to delete request ID:", id);
-    // Add delete logic wrapper here if endpoint becomes available
-  };
+  try {
+    const response = await fetch("http://localhost:3000/api/deleteShiftRequest", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ requestID: id })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || "Failed to delete request");
+    }
+
+    // Remove the deleted request from local state so its card disappears
+    setPendingRequests((prev) => prev.filter((request) => request.id !== id));
+  } catch (error) {
+    console.error("Failed to delete shift request", error);
+  }
+};
 
   const handleSubmitNewRequest = async () => {
       const sqlDate = selectedDate
