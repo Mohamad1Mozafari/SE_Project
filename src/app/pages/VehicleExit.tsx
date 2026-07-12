@@ -69,7 +69,7 @@ export function VehicleExit() {
 
     if (result) {
       toast.success(
-        `Vehicle ${vehicleData.plateNumber} exit confirmed. Fee: $${Number(result.TotalCost).toFixed(2)}`
+        `Vehicle ${vehicleData.plateNumber} exit confirmed. Fee: ${Number(result.TotalCost).toFixed(2)} T`
       );
       setSearchPlate("");
       setVehicleFound(false);
@@ -167,7 +167,7 @@ export function VehicleExit() {
                     <div className="space-y-2">
                       <Label>Estimated Fee</Label>
                       <div className="p-3 bg-green-50 rounded-lg font-bold text-green-700 text-xl">
-                        ${vehicleData.estimatedFee.toFixed(2)}
+                        {vehicleData.estimatedFee.toFixed(2)} T
                       </div>
                     </div>
                   </div>
@@ -257,11 +257,11 @@ export function VehicleExit() {
             <CardContent className="space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">Entrance Fee</span>
-                <span className="font-semibold">${pricing.entranceFee.toFixed(2)}</span>
+                <span className="font-semibold">{pricing.entranceFee.toFixed(2)} T</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">Hourly Rate</span>
-                <span className="font-semibold">${pricing.hourlyFee.toFixed(2)}</span>
+                <span className="font-semibold">{pricing.hourlyFee.toFixed(2)} T</span>
               </div>
             </CardContent>
           </Card>

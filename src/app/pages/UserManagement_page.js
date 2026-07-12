@@ -1,92 +1,96 @@
-//get the user table records and send in here and when one of them are selected by the name or other thign you choose and edit thigs of that and send for the update 
-export default function UserManagement (){
-       let response = await fetch("http://localhost:3000/VehicleExit",{method:"GET"});
-        let get_users = await response.json();
-        let name , email  , role  , Status , Last_Login_Time , id ;
-        name= get_users["name"];
-        email= get_users["email"];
-        role= get_users["role"];
-        Status= get_users["Status"];
-        id= get_users["id"];
-        Last_Login_Time = last_login(id); 
-        return name , email  , role  , Status , Last_Login_Time , id ;
+// UserManagement_page.js
+
+export async function getUsers() {
+  const response = await fetch("http://localhost:3000/api/user_management/get_all_userInfo", { 
+    method: "GET" 
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Server responded with status: ${response.status}`);
+  }
+
+  return await response.json(); 
 }
 
-function delete_user(){
-
-}
-function check_anithing_changed (old_name , old_role , new_role , new_name , new_email , new_status , old_email , old_status){
-if ( old_role == new_role && old_name==new_name && new_email == old_email && new_status == old_status){
-    return 0 ; 
-}
-return 1 ;
-}
-function edit_user(old_name , old_role , new_role , new_name , new_email , new_status , old_email , old_status){
-// if one of them changed go use the post mehtod 
-if (check_anithing_changed(old_name , old_role , new_role , new_name , new_email , new_status , old_email , old_status)){
-    let massage = "nothing changed"
-}
-return massage ; 
-let response = await fetch("http://localhost:3000/edit_user",
-    {
-
-        method:"POST",
-
-        headers:{
-            "Content-Type":"application/json"
-        },
-
-        body: JSON.stringify({
-
-            "name_old":name_old,
-            "role_old":role_old ,
-            "new_name":new_name ,
-            "new_role":new_role,
-            "email":email,
-            "status":status 
-
-        })
+export async function deleteUser(username) {
+  try {
+    const response = await fetch("http://localhost:3000/api/user_management/delete_user", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username })
     });
-    let check = await response.json();
-    if (check=="success"){
-
-    }else {
-        return "error can not edit user";
-    }
-
+    const result = await response.json();
+    return result === "success";
+  } catch (error) {
+    console.error("Delete user error:", error);
+    return false;
+  }
 }
 
+export async function editUser(oldUser, newUser) {
+  const passwordChanged = newUser.password?.trim();
+  console.log ("$$$$$$$$$$$$$this is massage to see ")
+  // 1. Simplified and safe modification checker
+  if (
+    oldUser.name === newUser.name &&
+    oldUser.role === newUser.role &&
+    oldUser.email === newUser.email &&
+    !passwordChanged
+  ) {
+    return { success: false, message: "No data modifications detected." };
+  }
 
-function add_user (){
-    let response = await fetch("http://localhost:3000/add_user",
-    {
-
-        method:"POST",
-
-        headers:{
-            "Content-Type":"application/json"
-        },
-
-        body: JSON.stringify({
-
-            "name_old":name_old,
-            "role_old":role_old ,
-            "new_name":new_name ,
-            "new_role":new_role,
-            "email":email,
-            "status":status 
-
-        })
+  try {
+    const response = await fetch("http://localhost:3000/api/user_management/edit_user", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: oldUser.username,
+        name: newUser.name,
+        email: newUser.email,
+        role: newUser.role,
+        password: passwordChanged || ""
+      })
     });
-        let check = await response.json();
-    if (check=="success"){
 
-    }else {
-        return "error can not edit user";
+    const check = await response.json();
+
+    // 2. Align parsing with the actual JSON structure returned by server
+    if (response.ok && check.success) {
+      return { success: true };
+    } else {
+      return { 
+        success: false, 
+        message: check.message || "Database rejected profile parameter updates." 
+      };
     }
+  } catch (error) {
+    return { success: false, message: "Network connection failure." };
+  }
 }
-function last_login(id){
-let response = await fetch("http://localhost:3000/add_user",{method:"POST"});
-let get_rsult_login = await response.json();
-return get_rsult_login["time"] ;
+
+export async function addUser(newUser) {
+  try {
+    const response = await fetch("http://localhost:3000/api/user_management/add_user", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: newUser.username, 
+        new_name: newUser.name,
+        email: newUser.email,
+        new_role: newUser.role,
+        password: newUser.password
+      })
+    });
+    const check = await response.json();
+    if (check === "success") {
+      return { success: true };
+    } else if (check === "failed username is used") {
+      return { success: false, message: "Username is already taken. Choose another one." };
+    } else {
+      return { success: false, message: "Server error occurred while adding user." };
+    }
+  } catch (error) {
+    return { success: false, message: "Network connection failure." };
+  }
 }
